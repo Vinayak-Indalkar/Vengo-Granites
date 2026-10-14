@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as initialData from '../data/mockData';
+import { translate, SUPPORTED_LANGUAGES } from '../i18n/translations';
 
 const AppContext = createContext();
 
@@ -19,6 +20,11 @@ export function AppProvider({ children }) {
 
   // Active Client: for multi-client separation. When null, QT Super Admin view.
   const [activeClient, setActiveClient] = useState(initialData.initialClients[0]);
+
+  // Multilingual System: English | Hindi | Odia | Telugu
+  const [language, setLanguageState] = useState(() => {
+    return loadPersisted('language', 'English') || 'English';
+  });
 
   const [currentUser, setCurrentUser] = useState({
     name: 'Rajesh Sharma',
@@ -45,8 +51,65 @@ export function AppProvider({ children }) {
   const [plans, setPlans] = useState(initialData.initialPlans || []);
 
   // Masters
-  const [customers, setCustomers] = useState(initialData.initialCustomers || []);
-  const [suppliers, setSuppliers] = useState(initialData.initialSuppliers || []);
+  const [customers, setCustomers] = useState(() => {
+    let loaded = loadPersisted('customers', null);
+    if (!Array.isArray(loaded) || loaded.length === 0) {
+      return initialData.initialCustomers || [];
+    }
+    const existingIds = new Set(loaded.map(c => c.id || c.code || c.legacyId));
+    const missing = (initialData.initialCustomers || []).filter(ic => !existingIds.has(ic.id) && !existingIds.has(ic.code) && !existingIds.has(ic.legacyId));
+    loaded = [...loaded, ...missing];
+
+    return loaded.map(c => {
+      const match = (initialData.initialCustomers || []).find(ic =>
+        ic.id === c.id || ic.code === c.code || ic.legacyId === c.id || ic.legacyId === c.legacyId || ic.name === c.name
+      );
+      if (match) {
+        return {
+          ...match,
+          ...c,
+          id: c.id || match.id,
+          code: c.code || match.code || c.id,
+          name: c.name || match.name,
+          type: c.type || match.type || 'Dealer',
+          status: c.status || match.status || 'Active',
+          contacts: (c.contacts && c.contacts.length > 0) ? c.contacts : (match.contacts || []),
+          documents: (c.documents && c.documents.length > 0) ? c.documents : (match.documents || []),
+          shippingAddresses: (c.shippingAddresses && c.shippingAddresses.length > 0) ? c.shippingAddresses : (match.shippingAddresses || [])
+        };
+      }
+      return c;
+    });
+  });
+  const [suppliers, setSuppliers] = useState(() => {
+    let loaded = loadPersisted('suppliers', null);
+    if (!Array.isArray(loaded) || loaded.length === 0) {
+      return initialData.initialSuppliers || [];
+    }
+    const existingIds = new Set(loaded.map(s => s.id || s.code || s.legacyId));
+    const missing = (initialData.initialSuppliers || []).filter(isup => !existingIds.has(isup.id) && !existingIds.has(isup.code) && !existingIds.has(isup.legacyId));
+    loaded = [...loaded, ...missing];
+
+    return loaded.map(s => {
+      const match = (initialData.initialSuppliers || []).find(isup =>
+        isup.id === s.id || isup.code === s.code || isup.legacyId === s.id || isup.legacyId === s.legacyId || isup.name === s.name
+      );
+      if (match) {
+        return {
+          ...match,
+          ...s,
+          id: s.id || match.id,
+          code: s.code || match.code || s.id,
+          name: s.name || match.name,
+          type: s.type || match.type || 'Quarry',
+          status: s.status || match.status || 'Active',
+          contacts: (s.contacts && s.contacts.length > 0) ? s.contacts : (match.contacts || []),
+          documents: (s.documents && s.documents.length > 0) ? s.documents : (match.documents || [])
+        };
+      }
+      return s;
+    });
+  });
   const [stoneTypes, setStoneTypes] = useState(initialData.initialStoneTypes || []);
   const [rateLists, setRateLists] = useState(initialData.initialRateLists || []);
   const [yardLocations, setYardLocations] = useState(initialData.initialYardLocations || []);
@@ -200,24 +263,46 @@ export function AppProvider({ children }) {
   const [stockCounts, setStockCounts] = useState(initialData.initialStockCounts || []);
   const [stockAdjustments, setStockAdjustments] = useState(initialData.initialStockAdjustments || []);
 
+  // Helper to load persisted items and merge any missing initial items by id
+  const loadAndMerge = (key, initialList) => {
+    const loaded = loadPersisted(key, initialList || []);
+    if (Array.isArray(loaded)) {
+      const existingIds = new Set(loaded.map(x => x.id));
+      const missing = (initialList || []).filter(x => !existingIds.has(x.id));
+      if (missing.length > 0) return [...loaded, ...missing];
+    }
+    return loaded || initialList || [];
+  };
+
   // 10-Step Sequential Inventory System (Supplier/Client Admin)
-  const [gateEntries, setGateEntries] = useState(() => loadPersisted('gateEntries', initialData.initialGateEntries || []));
-  const [weighbridgeTickets, setWeighbridgeTickets] = useState(() => loadPersisted('weighbridgeTickets', initialData.initialWeighbridgeTickets || []));
-  const [detailedRawBlocks, setDetailedRawBlocks] = useState(() => loadPersisted('detailedRawBlocks', initialData.initialDetailedRawBlocks || []));
-  const [qc1Inspections, setQc1Inspections] = useState(() => loadPersisted('qc1Inspections', initialData.initialQC1Inspections || []));
-  const [materialsStock, setMaterialsStock] = useState(() => loadPersisted('materialsStock', initialData.initialMaterialsStock || []));
-  const [materialJobs, setMaterialJobs] = useState(() => loadPersisted('materialJobs', initialData.initialMaterialJobs || []));
-  const [slicingJobs, setSlicingJobs] = useState(() => loadPersisted('slicingJobs', initialData.initialSlicingJobs || []));
-  const [lots, setLots] = useState(() => loadPersisted('lots', initialData.initialLots || []));
-  const [slabs, setSlabs] = useState(() => loadPersisted('slabs', initialData.initialSlabs || []));
-  const [qc2Inspections, setQc2Inspections] = useState(() => loadPersisted('qc2Inspections', initialData.initialQC2Inspections || []));
-  const [cutToSizeJobs, setCutToSizeJobs] = useState(() => loadPersisted('cutToSizeJobs', initialData.initialCutToSizeJobs || []));
-  const [pieces, setPieces] = useState(() => loadPersisted('pieces', initialData.initialPieces || []));
-  const [boxes, setBoxes] = useState(() => loadPersisted('boxes', initialData.initialBoxes || []));
-  const [storageMovements, setStorageMovements] = useState(() => loadPersisted('storageMovements', initialData.initialStorageMovements || []));
-  const [labels, setLabels] = useState(() => loadPersisted('labels', initialData.initialLabels || []));
-  const [defectStoreRecords, setDefectStoreRecords] = useState(() => loadPersisted('defectStoreRecords', initialData.initialDefectStoreRecords || []));
-  const [countSheets, setCountSheets] = useState(() => loadPersisted('countSheets', initialData.initialCountSheets || []));
+  const [gateEntries, setGateEntries] = useState(() => loadAndMerge('gateEntries', initialData.initialGateEntries || []));
+  const [weighbridgeTickets, setWeighbridgeTickets] = useState(() => loadAndMerge('weighbridgeTickets', initialData.initialWeighbridgeTickets || []));
+  const [detailedRawBlocks, setDetailedRawBlocks] = useState(() => loadAndMerge('detailedRawBlocks', initialData.initialDetailedRawBlocks || []));
+  const [qc1Inspections, setQc1Inspections] = useState(() => loadAndMerge('qc1Inspections', initialData.initialQC1Inspections || []));
+  const [materialsStock, setMaterialsStock] = useState(() => loadAndMerge('materialsStock', initialData.initialMaterialsStock || []));
+  const [materialJobs, setMaterialJobs] = useState(() => loadAndMerge('materialJobs', initialData.initialMaterialJobs || []));
+  const [slicingJobs, setSlicingJobs] = useState(() => loadAndMerge('slicingJobs', initialData.initialSlicingJobs || []));
+  const [lots, setLots] = useState(() => loadAndMerge('lots', initialData.initialLots || []));
+  const [slabs, setSlabs] = useState(() => loadAndMerge('slabs', initialData.initialSlabs || []));
+  const [qc2Inspections, setQc2Inspections] = useState(() => loadAndMerge('qc2Inspections', initialData.initialQC2Inspections || []));
+  const [cutToSizeJobs, setCutToSizeJobs] = useState(() => loadAndMerge('cutToSizeJobs', initialData.initialCutToSizeJobs || []));
+  const [pieces, setPieces] = useState(() => loadAndMerge('pieces', initialData.initialPieces || []));
+  const [boxes, setBoxes] = useState(() => loadAndMerge('boxes', initialData.initialBoxes || []));
+  const [storageMovements, setStorageMovements] = useState(() => loadAndMerge('storageMovements', initialData.initialStorageMovements || []));
+  const [labels, setLabels] = useState(() => loadAndMerge('labels', initialData.initialLabels || []));
+  const [defectStoreRecords, setDefectStoreRecords] = useState(() => loadAndMerge('defectStoreRecords', initialData.initialDefectStoreRecords || []));
+  const [countSheets, setCountSheets] = useState(() => loadAndMerge('countSheets', initialData.initialCountSheets || []));
+
+  // Settings Masters (Supplier/Client Admin)
+  const [finishes, setFinishes] = useState(() => loadAndMerge('finishes', initialData.initialFinishes || []));
+  const [thicknesses, setThicknesses] = useState(() => loadAndMerge('thicknesses', initialData.initialThicknesses || []));
+  const [grades, setGrades] = useState(() => loadAndMerge('grades', initialData.initialGrades || []));
+  const [machines, setMachines] = useState(() => loadAndMerge('machines', initialData.initialMachines || []));
+  const [defectTypesMaster, setDefectTypesMaster] = useState(() => loadAndMerge('defectTypesMaster', initialData.initialDefectTypes || []));
+  const [labelTemplatesMaster, setLabelTemplatesMaster] = useState(() => loadAndMerge('labelTemplatesMaster', initialData.initialLabelTemplates || []));
+  const [yardsMaster, setYardsMaster] = useState(() => loadAndMerge('yardsMaster', initialData.initialYardsMaster || []));
+  const [zonesMaster, setZonesMaster] = useState(() => loadAndMerge('zonesMaster', initialData.initialZonesMaster || []));
+  const [racksBaysMaster, setRacksBaysMaster] = useState(() => loadAndMerge('racksBaysMaster', initialData.initialRacksBaysMaster || []));
 
   // Sales & Commercial
   const [salesOrders, setSalesOrders] = useState(initialData.initialSalesOrders || []);
@@ -277,7 +362,26 @@ export function AppProvider({ children }) {
     setAuditLogs(prev => [newEntry, ...prev]);
   };
 
+  // Language switcher & translation helper
+  const setLanguage = (newLang) => {
+    setLanguageState(newLang);
+    try {
+      localStorage.setItem('granite_erp_language', JSON.stringify(newLang));
+    } catch (e) {}
+    if (activeClient && activeClient.id) {
+      setClients(prev => prev.map(c => c.id === activeClient.id ? {
+        ...c,
+        settings: { ...(c.settings || {}), language: newLang }
+      } : c));
+    }
+    logAudit('LANGUAGE_CHANGE', newLang, `Changed system language to ${newLang}`);
+    showToast(`Language set to ${newLang}`, 'success');
+  };
+
+  const t = (key, fallback = null) => translate(key, language, fallback);
+
   // LocalStorage Auto-persistence
+  useEffect(() => { try { localStorage.setItem('granite_erp_language', JSON.stringify(language)); } catch (e) {} }, [language]);
   useEffect(() => { try { localStorage.setItem('granite_erp_personnel', JSON.stringify(personnel)); } catch (e) {} }, [personnel]);
   useEffect(() => { try { localStorage.setItem('granite_erp_contractors', JSON.stringify(contractors)); } catch (e) {} }, [contractors]);
   useEffect(() => { try { localStorage.setItem('granite_erp_departments', JSON.stringify(departments)); } catch (e) {} }, [departments]);
@@ -296,6 +400,8 @@ export function AppProvider({ children }) {
   useEffect(() => { try { localStorage.setItem('granite_erp_auditLogs', JSON.stringify(auditLogs)); } catch (e) {} }, [auditLogs]);
   useEffect(() => { try { localStorage.setItem('granite_erp_customFields', JSON.stringify(customFields)); } catch (e) {} }, [customFields]);
   useEffect(() => { try { localStorage.setItem('granite_erp_clientRoles', JSON.stringify(clientRoles)); } catch (e) {} }, [clientRoles]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_suppliers', JSON.stringify(suppliers)); } catch (e) {} }, [suppliers]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_customers', JSON.stringify(customers)); } catch (e) {} }, [customers]);
 
   // 10-Step Sequential Inventory Auto-persistence
   useEffect(() => { try { localStorage.setItem('granite_erp_gateEntries', JSON.stringify(gateEntries)); } catch (e) {} }, [gateEntries]);
@@ -315,6 +421,15 @@ export function AppProvider({ children }) {
   useEffect(() => { try { localStorage.setItem('granite_erp_labels', JSON.stringify(labels)); } catch (e) {} }, [labels]);
   useEffect(() => { try { localStorage.setItem('granite_erp_defectStoreRecords', JSON.stringify(defectStoreRecords)); } catch (e) {} }, [defectStoreRecords]);
   useEffect(() => { try { localStorage.setItem('granite_erp_countSheets', JSON.stringify(countSheets)); } catch (e) {} }, [countSheets]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_finishes', JSON.stringify(finishes)); } catch (e) {} }, [finishes]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_thicknesses', JSON.stringify(thicknesses)); } catch (e) {} }, [thicknesses]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_grades', JSON.stringify(grades)); } catch (e) {} }, [grades]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_machines', JSON.stringify(machines)); } catch (e) {} }, [machines]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_defectTypesMaster', JSON.stringify(defectTypesMaster)); } catch (e) {} }, [defectTypesMaster]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_labelTemplatesMaster', JSON.stringify(labelTemplatesMaster)); } catch (e) {} }, [labelTemplatesMaster]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_yardsMaster', JSON.stringify(yardsMaster)); } catch (e) {} }, [yardsMaster]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_zonesMaster', JSON.stringify(zonesMaster)); } catch (e) {} }, [zonesMaster]);
+  useEffect(() => { try { localStorage.setItem('granite_erp_racksBaysMaster', JSON.stringify(racksBaysMaster)); } catch (e) {} }, [racksBaysMaster]);
 
   // Log Stock Movement helper
   const logMovement = (itemId, itemType, fromLoc, toLoc, reason) => {
@@ -475,32 +590,458 @@ export function AppProvider({ children }) {
   };
 
   // --- MASTERS CRUD ---
+  // --- MASTERS CRUD: CUSTOMERS / BUYERS ---
   const addCustomer = (item) => {
-    const newItem = { ...item, id: `CUST-${String(customers.length + 1).padStart(3, '0')}`, clientId: activeClient?.id, balance: 0, isBlocked: false, status: 'Active' };
-    setCustomers(prev => [newItem, ...prev]);
-    logAudit('CREATE', newItem.id, `Created customer ${newItem.name}`);
+    const maxCodeNum = customers.reduce((max, c) => {
+      const match = (c.code || c.id || '').match(/BUY-(\d+)/);
+      return match ? Math.max(max, parseInt(match[1], 10)) : max;
+    }, 0);
+    const generatedCode = `BUY-${String(maxCodeNum + 1).padStart(4, '0')}`;
+    const code = item.code || item.id || generatedCode;
+    const id = code;
+
+    const newBuyer = {
+      ...item,
+      id,
+      code,
+      legacyId: item.legacyId || null,
+      clientId: activeClient ? activeClient.id : 'CLI-001',
+      name: item.name || '',
+      type: item.type || 'Direct End-User',
+      taxId: item.taxId || '',
+      pan: item.pan || '',
+      phone: item.phone || '',
+      email: item.email || '',
+      website: item.website || '',
+      address: item.address || '',
+      city: item.city || '',
+      state: item.state || '',
+      country: item.country || 'India',
+      pincode: item.pincode || '',
+      shippingAddresses: Array.isArray(item.shippingAddresses) ? item.shippingAddresses : [],
+      creditLimit: Number(item.creditLimit) || 500000,
+      balance: Number(item.balance) || 0,
+      creditDays: Number(item.creditDays) || 30,
+      priceList: item.priceList || 'Standard Retail 2026',
+      currency: item.currency || 'INR',
+      deliveryTerms: item.deliveryTerms || 'Ex-Factory / Yard',
+      paymentTerms: item.paymentTerms || 'Net 30 Days',
+      tolerance: Number(item.tolerance) || 2.0,
+      bankName: item.bankName || '',
+      bankAccount: item.bankAccount || '',
+      bankIfsc: item.bankIfsc || '',
+      contacts: Array.isArray(item.contacts) ? item.contacts : [],
+      documents: Array.isArray(item.documents) ? item.documents : [],
+      status: item.status || 'Active',
+      isBlocked: !!item.isBlocked,
+      blockReason: item.blockReason || '',
+      isArchived: false,
+      createdAt: new Date().toISOString()
+    };
+
+    setCustomers(prev => [newBuyer, ...prev]);
+    logAudit('CREATE_BUYER', id, `Registered buyer ${newBuyer.name} (${id})`);
+    showToast(`Buyer ${newBuyer.name} created successfully!`, 'success');
+    return newBuyer;
   };
+
   const updateCustomer = (id, data) => {
-    setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
-    logAudit('UPDATE', id, `Updated customer ${id}`);
+    let oldBuyer = null;
+    setCustomers(prev => prev.map(c => {
+      if (c.id === id || c.code === id) {
+        oldBuyer = c;
+        return { ...c, ...data, id: c.id, code: c.code || c.id };
+      }
+      return c;
+    }));
+
+    // Data sync: update salesOrders, invoices, payments, dispatches if name changes
+    if (data.name && oldBuyer && oldBuyer.name !== data.name) {
+      setSalesOrders(prev => prev.map(so => (so.customerId === id || so.customer === oldBuyer.name) ? { ...so, customer: data.name } : so));
+      setInvoices(prev => prev.map(inv => (inv.customerId === id || inv.customer === oldBuyer.name) ? { ...inv, customer: data.name } : inv));
+      setDispatches(prev => prev.map(d => (d.customer === oldBuyer.name) ? { ...d, customer: data.name } : d));
+      setCustomerPayments(prev => prev.map(cp => (cp.customer === oldBuyer.name) ? { ...cp, customer: data.name } : cp));
+    }
+
+    logAudit('UPDATE_BUYER', id, `Updated details for buyer ${data.name || oldBuyer?.name || id}`);
+    showToast(`Buyer ${data.name || oldBuyer?.name || id} updated successfully!`, 'success');
   };
+
   const deleteCustomer = (id) => {
-    setCustomers(prev => prev.filter(c => c.id !== id));
-    logAudit('DELETE', id, `Deleted customer ${id}`);
+    const target = customers.find(c => c.id === id || c.code === id);
+    if (!target) return { action: 'not_found' };
+
+    const isUsed = 
+      salesOrders.some(so => so.customerId === id || so.customer === target.name || (target.legacyId && so.customerId === target.legacyId)) ||
+      invoices.some(inv => inv.customerId === id || inv.customer === target.name || (target.legacyId && inv.customerId === target.legacyId)) ||
+      customerPayments.some(p => p.customer === target.name) ||
+      dispatches.some(d => d.customer === target.name);
+
+    if (isUsed) {
+      setCustomers(prev => prev.map(c => (c.id === id || c.code === id) ? { ...c, status: 'Inactive', isArchived: true } : c));
+      logAudit('ARCHIVE_BUYER', id, `Archived buyer ${target.name} (has active sales orders/invoices)`);
+      showToast(`Buyer ${target.name} has active orders/invoices and was marked Inactive (Archived).`, 'info');
+      return { action: 'archived' };
+    } else {
+      setCustomers(prev => prev.filter(c => c.id !== id && c.code !== id));
+      logAudit('DELETE_BUYER', id, `Permanently removed unused buyer ${target.name}`);
+      showToast(`Buyer ${target.name} permanently removed.`, 'success');
+      return { action: 'deleted' };
+    }
+  };
+
+  const restoreCustomer = (id) => {
+    const target = customers.find(c => c.id === id || c.code === id);
+    if (!target) return;
+    setCustomers(prev => prev.map(c => (c.id === id || c.code === id) ? { ...c, status: 'Active', isArchived: false } : c));
+    logAudit('RESTORE_BUYER', id, `Restored buyer ${target.name} to Active`);
+    showToast(`Buyer ${target.name} restored to Active!`, 'success');
+  };
+
+  const toggleCustomerBlock = (id, reason = '') => {
+    const target = customers.find(c => c.id === id || c.code === id);
+    if (!target) return;
+    const willBlock = !target.isBlocked;
+    setCustomers(prev => prev.map(c => (c.id === id || c.code === id) ? {
+      ...c,
+      isBlocked: willBlock,
+      blockReason: willBlock ? (reason || 'Admin block applied') : ''
+    } : c));
+
+    if (willBlock) {
+      logAudit('BLOCK_BUYER', id, `Blocked buyer ${target.name}. Reason: ${reason || 'Unspecified'}`);
+      showToast(`Buyer ${target.name} has been BLOCKED. New sales orders restricted.`, 'error');
+    } else {
+      logAudit('UNBLOCK_BUYER', id, `Unblocked buyer ${target.name}`);
+      showToast(`Buyer ${target.name} unblocked successfully!`, 'success');
+    }
+  };
+
+  const bulkArchiveCustomers = (ids) => {
+    setCustomers(prev => prev.map(c => ids.includes(c.id) ? { ...c, status: 'Inactive', isArchived: true } : c));
+    logAudit('BULK_ARCHIVE_BUYERS', 'BUYERS', `Archived ${ids.length} buyers`);
+    showToast(`${ids.length} buyers archived.`, 'info');
+  };
+
+  const bulkRestoreCustomers = (ids) => {
+    setCustomers(prev => prev.map(c => ids.includes(c.id) ? { ...c, status: 'Active', isArchived: false } : c));
+    logAudit('BULK_RESTORE_BUYERS', 'BUYERS', `Restored ${ids.length} buyers to Active`);
+    showToast(`${ids.length} buyers restored to Active.`, 'success');
+  };
+
+  const addCustomerContact = (customerId, contact) => {
+    const contactId = `CNT-${Date.now().toString().slice(-4)}`;
+    const newContact = { ...contact, id: contactId };
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerId || c.code === customerId) {
+        const existing = c.contacts || [];
+        const updated = newContact.isPrimary ? existing.map(ct => ({ ...ct, isPrimary: false })) : existing;
+        return { ...c, contacts: [...updated, newContact] };
+      }
+      return c;
+    }));
+    logAudit('ADD_BUYER_CONTACT', customerId, `Added contact ${newContact.name} to buyer`);
+    showToast(`Contact ${newContact.name} added!`, 'success');
+  };
+
+  const updateCustomerContact = (customerId, contactId, contactData) => {
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerId || c.code === customerId) {
+        const updated = (c.contacts || []).map(ct => {
+          if (ct.id === contactId) {
+            return { ...ct, ...contactData };
+          }
+          if (contactData.isPrimary) {
+            return { ...ct, isPrimary: false };
+          }
+          return ct;
+        });
+        return { ...c, contacts: updated };
+      }
+      return c;
+    }));
+    logAudit('UPDATE_BUYER_CONTACT', customerId, `Updated contact ${contactId}`);
+    showToast(`Contact updated!`, 'success');
+  };
+
+  const deleteCustomerContact = (customerId, contactId) => {
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerId || c.code === customerId) {
+        return { ...c, contacts: (c.contacts || []).filter(ct => ct.id !== contactId) };
+      }
+      return c;
+    }));
+    logAudit('DELETE_BUYER_CONTACT', customerId, `Removed contact ${contactId}`);
+    showToast(`Contact removed.`, 'info');
+  };
+
+  const addCustomerAddress = (customerId, address) => {
+    const addrId = `ADR-${Date.now().toString().slice(-4)}`;
+    const newAddr = { ...address, id: addrId };
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerId || c.code === customerId) {
+        const existing = c.shippingAddresses || [];
+        const updated = newAddr.isDefault ? existing.map(a => ({ ...a, isDefault: false })) : existing;
+        return { ...c, shippingAddresses: [...updated, newAddr] };
+      }
+      return c;
+    }));
+    logAudit('ADD_BUYER_ADDRESS', customerId, `Added shipping address ${newAddr.label || addrId}`);
+    showToast(`Shipping address added!`, 'success');
+  };
+
+  const updateCustomerAddress = (customerId, addressId, addressData) => {
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerId || c.code === customerId) {
+        const updated = (c.shippingAddresses || []).map(a => {
+          if (a.id === addressId) {
+            return { ...a, ...addressData };
+          }
+          if (addressData.isDefault) {
+            return { ...a, isDefault: false };
+          }
+          return a;
+        });
+        return { ...c, shippingAddresses: updated };
+      }
+      return c;
+    }));
+    logAudit('UPDATE_BUYER_ADDRESS', customerId, `Updated shipping address ${addressId}`);
+    showToast(`Shipping address updated!`, 'success');
+  };
+
+  const deleteCustomerAddress = (customerId, addressId) => {
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerId || c.code === customerId) {
+        return { ...c, shippingAddresses: (c.shippingAddresses || []).filter(a => a.id !== addressId) };
+      }
+      return c;
+    }));
+    logAudit('DELETE_BUYER_ADDRESS', customerId, `Removed shipping address ${addressId}`);
+    showToast(`Shipping address removed.`, 'info');
+  };
+
+  const addCustomerDocument = (customerId, doc) => {
+    const docId = `DOC-${Date.now().toString().slice(-4)}`;
+    const newDoc = { ...doc, id: docId };
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerId || c.code === customerId) {
+        return { ...c, documents: [...(c.documents || []), newDoc] };
+      }
+      return c;
+    }));
+    logAudit('ADD_BUYER_DOCUMENT', customerId, `Uploaded document ${newDoc.name}`);
+    showToast(`Document ${newDoc.name} uploaded!`, 'success');
+  };
+
+  const updateCustomerDocument = (customerId, docId, docData) => {
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerId || c.code === customerId) {
+        const updated = (c.documents || []).map(d => d.id === docId ? { ...d, ...docData } : d);
+        return { ...c, documents: updated };
+      }
+      return c;
+    }));
+    logAudit('UPDATE_BUYER_DOCUMENT', customerId, `Updated document ${docId}`);
+    showToast(`Document updated!`, 'success');
+  };
+
+  const deleteCustomerDocument = (customerId, docId) => {
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerId || c.code === customerId) {
+        return { ...c, documents: (c.documents || []).filter(d => d.id !== docId) };
+      }
+      return c;
+    }));
+    logAudit('DELETE_BUYER_DOCUMENT', customerId, `Removed document ${docId}`);
+    showToast(`Document removed.`, 'info');
   };
 
   const addSupplier = (item) => {
-    const newItem = { ...item, id: `SUP-${String(suppliers.length + 1).padStart(3, '0')}`, clientId: activeClient?.id, status: 'Active' };
-    setSuppliers(prev => [newItem, ...prev]);
-    logAudit('CREATE', newItem.id, `Created supplier ${newItem.name}`);
+    const maxCodeNum = suppliers.reduce((max, s) => {
+      const match = (s.code || s.id || '').match(/SUP-(\d+)/);
+      return match ? Math.max(max, parseInt(match[1], 10)) : max;
+    }, 0);
+    const generatedCode = `SUP-${String(maxCodeNum + 1).padStart(4, '0')}`;
+    const code = item.code || item.id || generatedCode;
+    const id = code;
+
+    const newSupplier = {
+      ...item,
+      id,
+      code,
+      legacyId: item.legacyId || null,
+      clientId: activeClient ? activeClient.id : 'CLI-001',
+      status: item.status || 'Active',
+      isArchived: false,
+      contacts: Array.isArray(item.contacts) ? item.contacts : [],
+      documents: Array.isArray(item.documents) ? item.documents : [],
+      rating: item.rating || 'A',
+      qualityScore: Number(item.qualityScore) || 90,
+      deliveryScore: Number(item.deliveryScore) || 90,
+      paymentDays: Number(item.paymentDays) || 30,
+      creditDays: Number(item.creditDays) || 30,
+      currency: item.currency || 'INR',
+      weightTolerance: Number(item.weightTolerance) || 2.0,
+      createdAt: new Date().toISOString()
+    };
+
+    setSuppliers(prev => [newSupplier, ...prev]);
+    logAudit('CREATE', id, `Registered supplier ${newSupplier.name} (${id})`);
+    showToast(`Supplier ${newSupplier.name} created successfully!`, 'success');
+    return newSupplier;
   };
+
   const updateSupplier = (id, data) => {
-    setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
-    logAudit('UPDATE', id, `Updated supplier ${id}`);
+    let oldSupplier = null;
+    setSuppliers(prev => prev.map(s => {
+      if (s.id === id || s.code === id) {
+        oldSupplier = s;
+        return { ...s, ...data, id: s.id, code: s.code || s.id };
+      }
+      return s;
+    }));
+
+    // Data sync: Editing supplier updates every PO, GRN, Raw Block, bill, payment that uses it
+    if (data.name && oldSupplier && oldSupplier.name !== data.name) {
+      setPurchaseOrders(prev => prev.map(po => (po.supplierId === id || po.supplier === oldSupplier.name) ? { ...po, supplier: data.name } : po));
+      setGateEntries(prev => prev.map(g => (g.supplier === oldSupplier.name) ? { ...g, supplier: data.name } : g));
+      setDetailedRawBlocks(prev => prev.map(b => (b.supplier === oldSupplier.name) ? { ...b, supplier: data.name } : b));
+      setSupplierBills(prev => prev.map(sb => (sb.supplierId === id || sb.supplier === oldSupplier.name) ? { ...sb, supplier: data.name } : sb));
+      setSupplierPayments(prev => prev.map(sp => (sp.supplier === oldSupplier.name) ? { ...sp, supplier: data.name } : sp));
+    }
+
+    logAudit('UPDATE', id, `Updated details for supplier ${data.name || oldSupplier?.name || id}`);
+    showToast(`Supplier ${data.name || oldSupplier?.name || id} updated successfully!`, 'success');
   };
+
   const deleteSupplier = (id) => {
-    setSuppliers(prev => prev.filter(s => s.id !== id));
-    logAudit('DELETE', id, `Deleted supplier ${id}`);
+    const target = suppliers.find(s => s.id === id || s.code === id);
+    if (!target) return { action: 'not_found' };
+
+    // Check if supplier is used in downstream transactions
+    const isUsed = 
+      purchaseOrders.some(po => po.supplierId === id || po.supplier === target.name || (target.legacyId && po.supplierId === target.legacyId)) ||
+      gateEntries.some(g => g.supplier === target.name) ||
+      detailedRawBlocks.some(b => b.supplier === target.name) ||
+      supplierBills.some(b => b.supplierId === id || b.supplier === target.name || (target.legacyId && b.supplierId === target.legacyId)) ||
+      supplierPayments.some(p => p.supplier === target.name);
+
+    if (isUsed) {
+      // Archive instead of remove
+      setSuppliers(prev => prev.map(s => (s.id === id || s.code === id) ? { ...s, status: 'Inactive', isArchived: true } : s));
+      logAudit('ARCHIVE', id, `Archived supplier ${target.name} (has active linked transactions)`);
+      showToast(`Supplier ${target.name} has linked transactions and was moved to Inactive (Archived).`, 'info');
+      return { action: 'archived' };
+    } else {
+      // Permanently remove
+      setSuppliers(prev => prev.filter(s => s.id !== id && s.code !== id));
+      logAudit('DELETE', id, `Permanently removed unused supplier ${target.name}`);
+      showToast(`Supplier ${target.name} permanently removed.`, 'success');
+      return { action: 'deleted' };
+    }
+  };
+
+  const restoreSupplier = (id) => {
+    const target = suppliers.find(s => s.id === id || s.code === id);
+    if (!target) return;
+    setSuppliers(prev => prev.map(s => (s.id === id || s.code === id) ? { ...s, status: 'Active', isArchived: false } : s));
+    logAudit('RESTORE', id, `Restored supplier ${target.name} to Active`);
+    showToast(`Supplier ${target.name} restored to Active!`, 'success');
+  };
+
+  const bulkArchiveSuppliers = (ids) => {
+    setSuppliers(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: 'Inactive', isArchived: true } : s));
+    logAudit('BULK_ARCHIVE', 'SUPPLIERS', `Archived ${ids.length} suppliers`);
+    showToast(`${ids.length} suppliers archived.`, 'info');
+  };
+
+  const bulkRestoreSuppliers = (ids) => {
+    setSuppliers(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: 'Active', isArchived: false } : s));
+    logAudit('BULK_RESTORE', 'SUPPLIERS', `Restored ${ids.length} suppliers to Active`);
+    showToast(`${ids.length} suppliers restored to Active.`, 'success');
+  };
+
+  const addSupplierContact = (supplierId, contact) => {
+    const contactId = `CNT-${Date.now().toString().slice(-4)}`;
+    const newContact = { ...contact, id: contactId };
+    setSuppliers(prev => prev.map(s => {
+      if (s.id === supplierId || s.code === supplierId) {
+        const existing = s.contacts || [];
+        const updated = newContact.isPrimary ? existing.map(c => ({ ...c, isPrimary: false })) : existing;
+        return { ...s, contacts: [...updated, newContact] };
+      }
+      return s;
+    }));
+    logAudit('ADD_CONTACT', supplierId, `Added contact ${newContact.name} to supplier`);
+    showToast(`Contact ${newContact.name} added!`, 'success');
+  };
+
+  const updateSupplierContact = (supplierId, contactId, contactData) => {
+    setSuppliers(prev => prev.map(s => {
+      if (s.id === supplierId || s.code === supplierId) {
+        const updated = (s.contacts || []).map(c => {
+          if (c.id === contactId) {
+            return { ...c, ...contactData };
+          }
+          if (contactData.isPrimary) {
+            return { ...c, isPrimary: false };
+          }
+          return c;
+        });
+        return { ...s, contacts: updated };
+      }
+      return s;
+    }));
+    logAudit('UPDATE_CONTACT', supplierId, `Updated contact ${contactId}`);
+    showToast(`Contact updated!`, 'success');
+  };
+
+  const deleteSupplierContact = (supplierId, contactId) => {
+    setSuppliers(prev => prev.map(s => {
+      if (s.id === supplierId || s.code === supplierId) {
+        return { ...s, contacts: (s.contacts || []).filter(c => c.id !== contactId) };
+      }
+      return s;
+    }));
+    logAudit('DELETE_CONTACT', supplierId, `Removed contact ${contactId}`);
+    showToast(`Contact removed.`, 'info');
+  };
+
+  const addSupplierDocument = (supplierId, doc) => {
+    const docId = `DOC-${Date.now().toString().slice(-4)}`;
+    const newDoc = { ...doc, id: docId };
+    setSuppliers(prev => prev.map(s => {
+      if (s.id === supplierId || s.code === supplierId) {
+        return { ...s, documents: [...(s.documents || []), newDoc] };
+      }
+      return s;
+    }));
+    logAudit('ADD_DOCUMENT', supplierId, `Uploaded document ${newDoc.name}`);
+    showToast(`Document ${newDoc.name} uploaded!`, 'success');
+  };
+
+  const updateSupplierDocument = (supplierId, docId, docData) => {
+    setSuppliers(prev => prev.map(s => {
+      if (s.id === supplierId || s.code === supplierId) {
+        const updated = (s.documents || []).map(d => d.id === docId ? { ...d, ...docData } : d);
+        return { ...s, documents: updated };
+      }
+      return s;
+    }));
+    logAudit('UPDATE_DOCUMENT', supplierId, `Updated document ${docId}`);
+    showToast(`Document updated!`, 'success');
+  };
+
+  const deleteSupplierDocument = (supplierId, docId) => {
+    setSuppliers(prev => prev.map(s => {
+      if (s.id === supplierId || s.code === supplierId) {
+        return { ...s, documents: (s.documents || []).filter(d => d.id !== docId) };
+      }
+      return s;
+    }));
+    logAudit('DELETE_DOCUMENT', supplierId, `Removed document ${docId}`);
+    showToast(`Document removed.`, 'info');
   };
 
   const addStoneType = (item) => {
@@ -545,6 +1086,147 @@ export function AppProvider({ children }) {
     logAudit('DELETE', id, `Deleted yard location ${id}`);
   };
 
+  // Masters CRUD (Supplier/Client Admin)
+  const addMaterialStock = (item) => {
+    const newItem = { ...item, id: item.id || `MAT-${String(materialsStock.length + 1).padStart(4, '0')}` };
+    setMaterialsStock(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created material ${newItem.name}`);
+  };
+  const updateMaterialStock = (id, data) => {
+    setMaterialsStock(prev => prev.map(m => m.id === id ? { ...m, ...data } : m));
+    logAudit('UPDATE', id, `Updated material ${id}`);
+  };
+  const deleteMaterialStock = (id) => {
+    setMaterialsStock(prev => prev.filter(m => m.id !== id));
+    logAudit('DELETE', id, `Deleted material ${id}`);
+  };
+
+  const addFinish = (item) => {
+    const newItem = { ...item, id: item.id || `FIN-${String(finishes.length + 1).padStart(3, '0')}`, status: item.status || 'Active' };
+    setFinishes(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created finish ${newItem.name}`);
+  };
+  const updateFinish = (id, data) => {
+    setFinishes(prev => prev.map(f => f.id === id ? { ...f, ...data } : f));
+    logAudit('UPDATE', id, `Updated finish ${id}`);
+  };
+  const deleteFinish = (id) => {
+    setFinishes(prev => prev.filter(f => f.id !== id));
+    logAudit('DELETE', id, `Deleted finish ${id}`);
+  };
+
+  const addThickness = (item) => {
+    const newItem = { ...item, id: item.id || `THK-${String(thicknesses.length + 1).padStart(3, '0')}`, status: item.status || 'Active' };
+    setThicknesses(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created thickness ${newItem.code || newItem.thicknessValue}`);
+  };
+  const updateThickness = (id, data) => {
+    setThicknesses(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
+    logAudit('UPDATE', id, `Updated thickness ${id}`);
+  };
+  const deleteThickness = (id) => {
+    setThicknesses(prev => prev.filter(t => t.id !== id));
+    logAudit('DELETE', id, `Deleted thickness ${id}`);
+  };
+
+  const addGrade = (item) => {
+    const newItem = { ...item, id: item.id || `GRD-${String(grades.length + 1).padStart(3, '0')}`, status: item.status || 'Active' };
+    setGrades(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created grade ${newItem.name}`);
+  };
+  const updateGrade = (id, data) => {
+    setGrades(prev => prev.map(g => g.id === id ? { ...g, ...data } : g));
+    logAudit('UPDATE', id, `Updated grade ${id}`);
+  };
+  const deleteGrade = (id) => {
+    setGrades(prev => prev.filter(g => g.id !== id));
+    logAudit('DELETE', id, `Deleted grade ${id}`);
+  };
+
+  const addMachine = (item) => {
+    const newItem = { ...item, id: item.id || `MCH-${String(machines.length + 1).padStart(3, '0')}`, status: item.status || 'Operational' };
+    setMachines(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created machine ${newItem.name}`);
+  };
+  const updateMachine = (id, data) => {
+    setMachines(prev => prev.map(m => m.id === id ? { ...m, ...data } : m));
+    logAudit('UPDATE', id, `Updated machine ${id}`);
+  };
+  const deleteMachine = (id) => {
+    setMachines(prev => prev.filter(m => m.id !== id));
+    logAudit('DELETE', id, `Deleted machine ${id}`);
+  };
+
+  const addDefectTypeMaster = (item) => {
+    const newItem = { ...item, id: item.id || `DEF-${String(defectTypesMaster.length + 1).padStart(3, '0')}`, status: item.status || 'Active' };
+    setDefectTypesMaster(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created defect type ${newItem.name}`);
+  };
+  const updateDefectTypeMaster = (id, data) => {
+    setDefectTypesMaster(prev => prev.map(d => d.id === id ? { ...d, ...data } : d));
+    logAudit('UPDATE', id, `Updated defect type ${id}`);
+  };
+  const deleteDefectTypeMaster = (id) => {
+    setDefectTypesMaster(prev => prev.filter(d => d.id !== id));
+    logAudit('DELETE', id, `Deleted defect type ${id}`);
+  };
+
+  const addLabelTemplateMaster = (item) => {
+    const newItem = { ...item, id: item.id || `TMP-${String(labelTemplatesMaster.length + 1).padStart(3, '0')}`, status: item.status || 'Active' };
+    setLabelTemplatesMaster(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created label template ${newItem.name}`);
+  };
+  const updateLabelTemplateMaster = (id, data) => {
+    setLabelTemplatesMaster(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
+    logAudit('UPDATE', id, `Updated label template ${id}`);
+  };
+  const deleteLabelTemplateMaster = (id) => {
+    setLabelTemplatesMaster(prev => prev.filter(t => t.id !== id));
+    logAudit('DELETE', id, `Deleted label template ${id}`);
+  };
+
+  const addYardMaster = (item) => {
+    const newItem = { ...item, id: item.id || `YRD-${String(yardsMaster.length + 1).padStart(3, '0')}`, status: item.status || 'Active' };
+    setYardsMaster(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created yard ${newItem.name}`);
+  };
+  const updateYardMaster = (id, data) => {
+    setYardsMaster(prev => prev.map(y => y.id === id ? { ...y, ...data } : y));
+    logAudit('UPDATE', id, `Updated yard ${id}`);
+  };
+  const deleteYardMaster = (id) => {
+    setYardsMaster(prev => prev.filter(y => y.id !== id));
+    logAudit('DELETE', id, `Deleted yard ${id}`);
+  };
+
+  const addZoneMaster = (item) => {
+    const newItem = { ...item, id: item.id || `ZON-${String(zonesMaster.length + 1).padStart(3, '0')}`, status: item.status || 'Active' };
+    setZonesMaster(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created zone ${newItem.name}`);
+  };
+  const updateZoneMaster = (id, data) => {
+    setZonesMaster(prev => prev.map(z => z.id === id ? { ...z, ...data } : z));
+    logAudit('UPDATE', id, `Updated zone ${id}`);
+  };
+  const deleteZoneMaster = (id) => {
+    setZonesMaster(prev => prev.filter(z => z.id !== id));
+    logAudit('DELETE', id, `Deleted zone ${id}`);
+  };
+
+  const addRackBayMaster = (item) => {
+    const newItem = { ...item, id: item.id || `BAY-${String(racksBaysMaster.length + 1).padStart(3, '0')}`, status: item.status || 'Active' };
+    setRacksBaysMaster(prev => [newItem, ...prev]);
+    logAudit('CREATE', newItem.id, `Created rack/bay ${newItem.name}`);
+  };
+  const updateRackBayMaster = (id, data) => {
+    setRacksBaysMaster(prev => prev.map(b => b.id === id ? { ...b, ...data } : b));
+    logAudit('UPDATE', id, `Updated rack/bay ${id}`);
+  };
+  const deleteRackBayMaster = (id) => {
+    setRacksBaysMaster(prev => prev.filter(b => b.id !== id));
+    logAudit('DELETE', id, `Deleted rack/bay ${id}`);
+  };
+
   const addUser = (item) => {
     const newItem = { ...item, id: `USR-${String(users.length + 1).padStart(3, '0')}`, clientId: activeClient?.id, status: 'Active' };
     setUsers(prev => [newItem, ...prev]);
@@ -577,9 +1259,29 @@ export function AppProvider({ children }) {
   };
 
   const addCustomField = (item) => {
-    const newItem = { ...item, id: `CF-${Date.now().toString().slice(-4)}`, clientId: activeClient?.id };
+    const newItem = {
+      ...item,
+      id: item.id || `CF-${Date.now().toString().slice(-4)}`,
+      clientId: activeClient?.id,
+      createdAt: item.createdAt || new Date().toISOString(),
+      status: item.status || 'Active'
+    };
     setCustomFields(prev => [newItem, ...prev]);
-    logAudit('CREATE', newItem.id, `Created custom field ${newItem.label}`);
+    logAudit('CREATE', newItem.id, `Created custom field ${newItem.label || newItem.name}`);
+    showToast(`Custom field "${newItem.label || newItem.name}" created successfully`);
+    return newItem;
+  };
+
+  const updateCustomField = (id, updates) => {
+    setCustomFields(prev => prev.map(f => f.id === id ? { ...f, ...updates, updatedAt: new Date().toISOString() } : f));
+    logAudit('UPDATE', id, `Updated custom field ${id}`);
+    showToast('Custom field updated');
+  };
+
+  const deleteCustomField = (id) => {
+    setCustomFields(prev => prev.filter(f => f.id !== id));
+    logAudit('DELETE', id, `Deleted custom field ${id}`);
+    showToast('Custom field deleted');
   };
 
   // --- HR & ATTENDANCE ---
@@ -719,6 +1421,102 @@ export function AppProvider({ children }) {
     setPersonnel(prev => prev.map(p => (p.contractorId === id ? { ...p, status: 'Active' } : p)));
     logAudit('RESTORE_CONTRACTOR', id, `Restored contractor ${con?.companyName || id} and linked workers`);
     showToast(`Contractor and linked workers restored to Active`, 'success');
+  };
+
+  const bulkArchiveContractors = (ids) => {
+    setContractors(prev => prev.map(c => ids.includes(c.id) ? { ...c, status: 'Inactive' } : c));
+    setPersonnel(prev => prev.map(p => ids.includes(p.contractorId) ? { ...p, status: 'Inactive' } : p));
+    logAudit('BULK_ARCHIVE_CONTRACTORS', 'CONTRACTORS', `Archived ${ids.length} contractors and their workers`);
+    showToast(`${ids.length} contractors archived.`, 'info');
+  };
+
+  const bulkRestoreContractors = (ids) => {
+    setContractors(prev => prev.map(c => ids.includes(c.id) ? { ...c, status: 'Active' } : c));
+    setPersonnel(prev => prev.map(p => ids.includes(p.contractorId) ? { ...p, status: 'Active' } : p));
+    logAudit('BULK_RESTORE_CONTRACTORS', 'CONTRACTORS', `Restored ${ids.length} contractors to Active`);
+    showToast(`${ids.length} contractors restored to Active.`, 'success');
+  };
+
+  const addContractorContact = (contractorId, contact) => {
+    const contactId = `CNT-${Date.now().toString().slice(-4)}`;
+    const newContact = { ...contact, id: contactId };
+    setContractors(prev => prev.map(c => {
+      if (c.id === contractorId || c.code === contractorId) {
+        const existing = c.contacts || [];
+        const updated = newContact.isPrimary ? existing.map(ct => ({ ...ct, isPrimary: false })) : existing;
+        return { ...c, contacts: [...updated, newContact] };
+      }
+      return c;
+    }));
+    logAudit('ADD_CONTRACTOR_CONTACT', contractorId, `Added contact ${newContact.name} to contractor`);
+    showToast(`Contact ${newContact.name} added!`, 'success');
+  };
+
+  const updateContractorContact = (contractorId, contactId, contactData) => {
+    setContractors(prev => prev.map(c => {
+      if (c.id === contractorId || c.code === contractorId) {
+        const updated = (c.contacts || []).map(ct => {
+          if (ct.id === contactId) {
+            return { ...ct, ...contactData };
+          }
+          if (contactData.isPrimary) {
+            return { ...ct, isPrimary: false };
+          }
+          return ct;
+        });
+        return { ...c, contacts: updated };
+      }
+      return c;
+    }));
+    logAudit('UPDATE_CONTRACTOR_CONTACT', contractorId, `Updated contact ${contactId}`);
+    showToast(`Contact updated!`, 'success');
+  };
+
+  const deleteContractorContact = (contractorId, contactId) => {
+    setContractors(prev => prev.map(c => {
+      if (c.id === contractorId || c.code === contractorId) {
+        return { ...c, contacts: (c.contacts || []).filter(ct => ct.id !== contactId) };
+      }
+      return c;
+    }));
+    logAudit('DELETE_CONTRACTOR_CONTACT', contractorId, `Removed contact ${contactId}`);
+    showToast(`Contact removed.`, 'info');
+  };
+
+  const addContractorDocument = (contractorId, doc) => {
+    const docId = `DOC-${Date.now().toString().slice(-4)}`;
+    const newDoc = { ...doc, id: docId };
+    setContractors(prev => prev.map(c => {
+      if (c.id === contractorId || c.code === contractorId) {
+        return { ...c, documents: [...(c.documents || []), newDoc] };
+      }
+      return c;
+    }));
+    logAudit('ADD_CONTRACTOR_DOCUMENT', contractorId, `Uploaded document ${newDoc.name}`);
+    showToast(`Document ${newDoc.name} uploaded!`, 'success');
+  };
+
+  const updateContractorDocument = (contractorId, docId, docData) => {
+    setContractors(prev => prev.map(c => {
+      if (c.id === contractorId || c.code === contractorId) {
+        const updated = (c.documents || []).map(d => d.id === docId ? { ...d, ...docData } : d);
+        return { ...c, documents: updated };
+      }
+      return c;
+    }));
+    logAudit('UPDATE_CONTRACTOR_DOCUMENT', contractorId, `Updated document ${docId}`);
+    showToast(`Document updated!`, 'success');
+  };
+
+  const deleteContractorDocument = (contractorId, docId) => {
+    setContractors(prev => prev.map(c => {
+      if (c.id === contractorId || c.code === contractorId) {
+        return { ...c, documents: (c.documents || []).filter(d => d.id !== docId) };
+      }
+      return c;
+    }));
+    logAudit('DELETE_CONTRACTOR_DOCUMENT', contractorId, `Removed document ${docId}`);
+    showToast(`Document removed.`, 'info');
   };
 
   // 3. Contractor Workers
@@ -2381,7 +3179,37 @@ export function AppProvider({ children }) {
   };
 
   const updateQC1Inspection = (id, patch) => {
-    setQc1Inspections(prev => prev.map(q => q.id === id ? { ...q, ...patch } : q));
+    setQc1Inspections(prev => prev.map(q => {
+      if (q.id === id) {
+        const updated = { ...q, ...patch };
+        const blockId = updated.blockId || patch.blockId;
+        if (blockId && patch.result) {
+          if (patch.result === 'Pass') {
+            setDetailedRawBlocks(blocks => blocks.map(b => b.id === blockId ? {
+              ...b,
+              status: 'QC 1 Passed',
+              currentStep: 3,
+              grade: patch.grade || b.grade
+            } : b));
+          } else if (patch.result === 'Rework') {
+            setDetailedRawBlocks(blocks => blocks.map(b => b.id === blockId ? {
+              ...b,
+              status: 'Received',
+              currentStep: 2,
+              remarks: `Rework Required: ${patch.remarks || ''}`
+            } : b));
+          } else if (patch.result === 'Reject') {
+            setDetailedRawBlocks(blocks => blocks.map(b => b.id === blockId ? {
+              ...b,
+              status: 'Rejected',
+              currentStep: 3
+            } : b));
+          }
+        }
+        return updated;
+      }
+      return q;
+    }));
     logAudit('UPDATE_QC1', id, `Updated QC 1 inspection`);
     showToast(`QC 1 Inspection ${id} updated`);
   };
@@ -2702,7 +3530,27 @@ export function AppProvider({ children }) {
   };
 
   const updateQC2Inspection = (id, patch) => {
-    setQc2Inspections(prev => prev.map(q => q.id === id ? { ...q, ...patch } : q));
+    setQc2Inspections(prev => prev.map(q => {
+      if (q.id === id) {
+        const updated = { ...q, ...patch };
+        const slabId = updated.slabId || patch.slabId;
+        const lotId = updated.lotId || patch.lotId;
+        if (patch.result) {
+          if (patch.result === 'Pass') {
+            if (slabId) setSlabs(slabs => slabs.map(s => s.id === slabId ? { ...s, status: 'QC 2 Passed', grade: patch.grade || s.grade } : s));
+            else if (lotId) setSlabs(slabs => slabs.map(s => s.lotId === lotId ? { ...s, status: 'QC 2 Passed', grade: patch.grade || s.grade } : s));
+          } else if (patch.result === 'Rework') {
+            if (slabId) setSlabs(slabs => slabs.map(s => s.id === slabId ? { ...s, status: 'In Material' } : s));
+            else if (lotId) setSlabs(slabs => slabs.map(s => s.lotId === lotId ? { ...s, status: 'In Material' } : s));
+          } else if (patch.result === 'Reject') {
+            if (slabId) setSlabs(slabs => slabs.map(s => s.id === slabId ? { ...s, status: 'Rejected' } : s));
+            else if (lotId) setSlabs(slabs => slabs.map(s => s.lotId === lotId ? { ...s, status: 'Rejected' } : s));
+          }
+        }
+        return updated;
+      }
+      return q;
+    }));
     logAudit('UPDATE_QC2', id, `Updated QC 2 record`);
     showToast(`QC 2 Inspection ${id} updated`);
   };
@@ -3128,6 +3976,18 @@ export function AppProvider({ children }) {
       targetBox = boxes.find(bx => bx.id === linked);
     }
 
+    // If searching by QC inspection ID
+    const targetQC1 = qc1Inspections.find(q => q.id === cleanId || q.inspectionNo === cleanId);
+    const targetQC2 = qc2Inspections.find(q => q.id === cleanId || q.inspectionNo === cleanId);
+    if (targetQC1 && !targetBlock && !targetSlab && !targetPiece) {
+      if (targetQC1.blockId) targetBlock = detailedRawBlocks.find(b => b.id === targetQC1.blockId);
+    }
+    if (targetQC2 && !targetBlock && !targetSlab && !targetPiece) {
+      if (targetQC2.slabId) targetSlab = slabs.find(s => s.id === targetQC2.slabId);
+      if (targetQC2.lotId && !targetSlab) targetSlab = slabs.find(s => s.lotId === targetQC2.lotId);
+      if (targetSlab?.blockId) targetBlock = detailedRawBlocks.find(b => b.id === targetSlab.blockId);
+    }
+
     // If target is Piece, resolve parent slab and block
     if (targetPiece) {
       if (!targetSlab && targetPiece.slabId) {
@@ -3301,6 +4161,9 @@ export function AppProvider({ children }) {
       // Operations & CRUD
       logAudit,
       logMovement,
+      addCustomField,
+      updateCustomField,
+      deleteCustomField,
       addClient,
       updateClient,
       toggleClientBlock,
@@ -3308,9 +4171,31 @@ export function AppProvider({ children }) {
       addCustomer,
       updateCustomer,
       deleteCustomer,
+      restoreCustomer,
+      toggleCustomerBlock,
+      bulkArchiveCustomers,
+      bulkRestoreCustomers,
+      addCustomerContact,
+      updateCustomerContact,
+      deleteCustomerContact,
+      addCustomerAddress,
+      updateCustomerAddress,
+      deleteCustomerAddress,
+      addCustomerDocument,
+      updateCustomerDocument,
+      deleteCustomerDocument,
       addSupplier,
       updateSupplier,
       deleteSupplier,
+      restoreSupplier,
+      bulkArchiveSuppliers,
+      bulkRestoreSuppliers,
+      addSupplierContact,
+      updateSupplierContact,
+      deleteSupplierContact,
+      addSupplierDocument,
+      updateSupplierDocument,
+      deleteSupplierDocument,
       addStoneType,
       updateStoneType,
       deleteStoneType,
@@ -3326,7 +4211,6 @@ export function AppProvider({ children }) {
       addClientRole,
       updateClientRole,
       deleteClientRole,
-      addCustomField,
       addPersonnel,
       updatePersonnel,
       deletePersonnel,
@@ -3339,6 +4223,14 @@ export function AppProvider({ children }) {
       updateContractor,
       deleteContractor,
       restoreContractor,
+      bulkArchiveContractors,
+      bulkRestoreContractors,
+      addContractorContact,
+      updateContractorContact,
+      deleteContractorContact,
+      addContractorDocument,
+      updateContractorDocument,
+      deleteContractorDocument,
       addContractorWorker,
       updateContractorWorker,
       deleteContractorWorker,
@@ -3497,6 +4389,61 @@ export function AppProvider({ children }) {
       approveCountSheet,
       rejectCountSheet,
       deleteCountSheet,
+
+      // Settings Masters (Supplier/Client Admin)
+      addMaterialStock,
+      updateMaterialStock,
+      deleteMaterialStock,
+
+      finishes,
+      addFinish,
+      updateFinish,
+      deleteFinish,
+
+      thicknesses,
+      addThickness,
+      updateThickness,
+      deleteThickness,
+
+      grades,
+      addGrade,
+      updateGrade,
+      deleteGrade,
+
+      machines,
+      addMachine,
+      updateMachine,
+      deleteMachine,
+
+      defectTypesMaster,
+      addDefectTypeMaster,
+      updateDefectTypeMaster,
+      deleteDefectTypeMaster,
+
+      labelTemplatesMaster,
+      addLabelTemplateMaster,
+      updateLabelTemplateMaster,
+      deleteLabelTemplateMaster,
+
+      yardsMaster,
+      addYardMaster,
+      updateYardMaster,
+      deleteYardMaster,
+
+      zonesMaster,
+      addZoneMaster,
+      updateZoneMaster,
+      deleteZoneMaster,
+
+      racksBaysMaster,
+      addRackBayMaster,
+      updateRackBayMaster,
+      deleteRackBayMaster,
+
+      language,
+      setLanguage,
+      t,
+      SUPPORTED_LANGUAGES,
 
       getTraceabilityChain
     }}>

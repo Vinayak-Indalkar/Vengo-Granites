@@ -54,17 +54,13 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
     updateEmployee,
     deleteEmployee,
     restoreEmployee,
-    addContractor,
-    updateContractor,
-    deleteContractor,
-    restoreContractor,
     addContractorWorker,
     updateContractorWorker,
     deleteContractorWorker,
     restoreContractorWorker
   } = useApp();
 
-  // Sub-tabs: 'employees' | 'contractors' | 'workers'
+  // Sub-tabs: 'employees' | 'workers'
   const [internalSubTab, setInternalSubTab] = useState(defaultSubTab);
   const subTab = defaultSubTab || internalSubTab;
   const setSubTab = (newSub) => {
@@ -110,24 +106,6 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
     consentBiometric: true
   });
 
-  const [conForm, setConForm] = useState({
-    companyName: '',
-    taxId: '',
-    contactPerson: '',
-    phone: '',
-    email: '',
-    address: '',
-    contractStart: '',
-    contractEnd: '',
-    contractDoc: '',
-    agreementRate: '',
-    rateUnit: 'Per Ton',
-    bankName: '',
-    bankAccount: '',
-    bankIfsc: '',
-    status: 'Active'
-  });
-
   const [wrkForm, setWrkForm] = useState({
     code: '',
     name: '',
@@ -159,14 +137,6 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
     consentBiometric: true
   });
 
-  // Calculate dynamic worker count for contractors
-  const contractorsWithCount = useMemo(() => {
-    return contractors.map(c => {
-      const count = personnel.filter(p => p.type === 'Contractor Worker' && p.contractorId === c.id).length;
-      return { ...c, workerCount: count };
-    });
-  }, [contractors, personnel]);
-
   // Filtered lists
   const filteredEmployees = useMemo(() => {
     return personnel.filter(p => {
@@ -175,13 +145,6 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
       return (p.status || 'Active') === statusFilter;
     });
   }, [personnel, statusFilter]);
-
-  const filteredContractors = useMemo(() => {
-    return contractorsWithCount.filter(c => {
-      if (statusFilter === 'All') return true;
-      return (c.status || 'Active') === statusFilter;
-    });
-  }, [contractorsWithCount, statusFilter]);
 
   const filteredWorkers = useMemo(() => {
     return personnel.filter(p => {
@@ -224,26 +187,6 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
         faceEnrolled: false,
         consentBiometric: true
       });
-    } else if (subTab === 'contractors') {
-      const nextNum = contractors.length + 1;
-      setConForm({
-        code: `CON-${String(nextNum).padStart(4, '0')}`,
-        companyName: '',
-        taxId: '',
-        contactPerson: '',
-        phone: '',
-        email: '',
-        address: '',
-        contractStart: new Date().toISOString().slice(0, 10),
-        contractEnd: '2027-12-31',
-        contractDoc: 'https://docs.granite.io/contracts/sample.pdf',
-        agreementRate: 150,
-        rateUnit: 'Per Ton',
-        bankName: '',
-        bankAccount: '',
-        bankIfsc: '',
-        status: 'Active'
-      });
     } else {
       const nextNum = personnel.filter(p => p.type === 'Contractor Worker').length + 1;
       setWrkForm({
@@ -285,8 +228,6 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
     setEditingItem(item);
     if (subTab === 'employees') {
       setEmpForm({ ...item });
-    } else if (subTab === 'contractors') {
-      setConForm({ ...item });
     } else {
       setWrkForm({ ...item });
     }
@@ -302,12 +243,6 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
       } else {
         addEmployee(empForm);
       }
-    } else if (subTab === 'contractors') {
-      if (editingItem) {
-        updateContractor(editingItem.id, conForm);
-      } else {
-        addContractor(conForm);
-      }
     } else {
       if (editingItem) {
         updateContractorWorker(editingItem.id, wrkForm);
@@ -320,17 +255,10 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
 
   // Handlers: Delete Trigger
   const triggerDelete = (item) => {
-    let confirmMsg = `Are you sure you want to delete ${item.name || item.companyName} (${item.code || item.id})?`;
-    if (subTab === 'contractors') {
-      const count = personnel.filter(p => p.contractorId === item.id).length;
-      if (count > 0) {
-        confirmMsg = `This contractor has ${count} linked workers. Archiving this contractor will mark all linked workers Inactive. Proceed?`;
-      }
-    } else {
-      const hasHistory = attendance.some(a => a.personId === item.id || a.employeeId === item.id);
-      if (hasHistory) {
-        confirmMsg = `${item.name} has attendance history. Deleting will archive the record (status Inactive) to preserve history. Proceed?`;
-      }
+    let confirmMsg = `Are you sure you want to delete ${item.name} (${item.code || item.id})?`;
+    const hasHistory = attendance.some(a => a.personId === item.id || a.employeeId === item.id);
+    if (hasHistory) {
+      confirmMsg = `${item.name} has attendance history. Deleting will archive the record (status Inactive) to preserve history. Proceed?`;
     }
 
     setDeleteConfirmTarget({
@@ -344,8 +272,6 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
     const { item } = deleteConfirmTarget;
     if (subTab === 'employees') {
       deleteEmployee(item.id);
-    } else if (subTab === 'contractors') {
-      deleteContractor(item.id);
     } else {
       deleteContractorWorker(item.id);
     }
@@ -418,48 +344,7 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
     }
   ];
 
-  // 2. Contractors Columns
-  const contractorColumns = [
-    {
-      header: 'Company Name',
-      render: r => (
-        <div>
-          <div style={{ fontWeight: 600, color: 'var(--ink)' }}>{r.companyName}</div>
-          <div style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>{r.code || r.id} • Tax: {r.taxId || 'N/A'}</div>
-        </div>
-      )
-    },
-    { header: 'Contact Person', accessor: 'contactPerson' },
-    { header: 'Phone / Email', render: r => `${r.phone || ''} • ${r.email || ''}` },
-    {
-      header: 'Workers',
-      render: r => <span className="badge badge-teal" style={{ fontWeight: 700 }}>{r.workerCount} Workers</span>
-    },
-    { header: 'Agreement', render: r => `$${r.agreementRate} / ${r.rateUnit || 'Ton'}` },
-    { header: 'Contract End', accessor: 'contractEnd' },
-    { header: 'Status', render: r => <StatusBadge status={r.status || 'Active'} /> },
-    {
-      header: 'Actions',
-      align: 'right',
-      render: r => (
-        <ActionDropdown
-          items={[
-            { label: 'Edit Contractor', onClick: () => handleOpenEdit(r) },
-            r.status === 'Inactive'
-              ? { label: 'Restore Contractor', onClick: () => restoreContractor(r.id) }
-              : {
-                  label: 'Delete Contractor',
-                  danger: true,
-                  confirm: `Remove contractor ${r.companyName}? Linked workers will be set to Inactive.`,
-                  onClick: () => triggerDelete(r)
-                }
-          ]}
-        />
-      )
-    }
-  ];
-
-  // 3. Contractor Workers Columns
+  // 2. Contractor Workers Columns
   const workerColumns = [
     {
       header: 'Worker',
@@ -523,7 +408,7 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--ink)' }}>
-            {subTab === 'employees' ? 'Employees' : subTab === 'contractors' ? 'Contractors' : 'Contractor Workers'}
+            {subTab === 'employees' ? 'Employees' : 'Contractor Workers'}
           </h2>
         </div>
 
@@ -531,7 +416,7 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
           <button className="btn btn-primary btn-sm" onClick={handleOpenCreate}>
             <Plus size={14} />
             <span>
-              {subTab === 'employees' ? 'Add Employee' : subTab === 'contractors' ? 'Add Contractor' : 'Add Worker'}
+              {subTab === 'employees' ? 'Add Employee' : 'Add Worker'}
             </span>
           </button>
         </div>
@@ -543,15 +428,6 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
           columns={employeeColumns}
           data={filteredEmployees}
           emptyMessage="No employee records found matching filter."
-          onRowClick={r => setProfileItem(r)}
-        />
-      )}
-
-      {subTab === 'contractors' && (
-        <DataTable
-          columns={contractorColumns}
-          data={filteredContractors}
-          emptyMessage="No contractor records found matching filter."
           onRowClick={r => setProfileItem(r)}
         />
       )}
@@ -569,7 +445,7 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
       <FormDrawer
         isOpen={isFormDrawerOpen}
         onClose={() => setIsFormDrawerOpen(false)}
-        title={editingItem ? `Edit ${subTab === 'employees' ? 'Employee' : subTab === 'contractors' ? 'Contractor' : 'Worker'}` : `New ${subTab === 'employees' ? 'Employee' : subTab === 'contractors' ? 'Contractor' : 'Worker'}`}
+        title={editingItem ? `Edit ${subTab === 'employees' ? 'Employee' : 'Worker'}` : `New ${subTab === 'employees' ? 'Employee' : 'Worker'}`}
         onSubmit={handleSaveForm}
         submitLabel={editingItem ? "Save Changes" : "Save Record"}
       >
@@ -687,72 +563,6 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
           </>
         )}
 
-        {subTab === 'contractors' && (
-          <>
-            <div className="form-group">
-              <label className="form-label">Company Name</label>
-              <input className="form-input" placeholder="Enter contractor company name" value={conForm.companyName} onChange={e => setConForm({ ...conForm, companyName: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Tax ID / VAT No.</label>
-              <input className="form-input" placeholder="e.g. IT-099182301" value={conForm.taxId} onChange={e => setConForm({ ...conForm, taxId: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Contact Person</label>
-              <input className="form-input" placeholder="Enter representative name" value={conForm.contactPerson} onChange={e => setConForm({ ...conForm, contactPerson: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Phone</label>
-              <input className="form-input" placeholder="+39-555-0100" value={conForm.phone} onChange={e => setConForm({ ...conForm, phone: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Email</label>
-              <input className="form-input" placeholder="contractor@company.it" value={conForm.email} onChange={e => setConForm({ ...conForm, email: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Agreement Rate ($)</label>
-              <input type="number" className="form-input" placeholder="140" value={conForm.agreementRate} onChange={e => setConForm({ ...conForm, agreementRate: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Rate Unit</label>
-              <select className="form-select" value={conForm.rateUnit} onChange={e => setConForm({ ...conForm, rateUnit: e.target.value })}>
-                <option value="Per Ton">Per Ton</option>
-                <option value="Per Slab">Per Slab</option>
-                <option value="Per Hour">Per Hour</option>
-                <option value="Monthly Fixed">Monthly Fixed</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Contract Start Date</label>
-              <DatePicker value={conForm.contractStart} onChange={val => setConForm({ ...conForm, contractStart: val })} placeholder="DD/MM/YYYY" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Contract End Date</label>
-              <DatePicker value={conForm.contractEnd} onChange={val => setConForm({ ...conForm, contractEnd: val })} placeholder="DD/MM/YYYY" />
-            </div>
-            <div className="form-group col-span-2">
-              <FileUpload
-                label="Contract Agreement Document"
-                value={conForm.contractDoc}
-                onChange={val => setConForm({ ...conForm, contractDoc: val })}
-                helperText="Signed vendor contract / rate agreement (PDF or scan)"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Bank Name</label>
-              <input className="form-input" placeholder="Intesa Sanpaolo" value={conForm.bankName} onChange={e => setConForm({ ...conForm, bankName: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Bank Account</label>
-              <input className="form-input" placeholder="IT99W0306911104000000112233" value={conForm.bankAccount} onChange={e => setConForm({ ...conForm, bankAccount: e.target.value })} />
-            </div>
-            <div className="form-group col-span-2">
-              <label className="form-label">Business Address</label>
-              <input className="form-input" placeholder="Enter address" value={conForm.address} onChange={e => setConForm({ ...conForm, address: e.target.value })} />
-            </div>
-          </>
-        )}
-
         {subTab === 'workers' && (
           <>
             <div className="form-group">
@@ -764,7 +574,7 @@ export function PersonnelScreen({ defaultSubTab = 'employees', onSubTabChange } 
               <input className="form-input" placeholder="Enter worker name" value={wrkForm.name} onChange={e => setWrkForm({ ...wrkForm, name: e.target.value })} />
             </div>
             <div className="form-group col-span-2">
-              <label className="form-label">Contractor Company (Required)</label>
+              <label className="form-label">Contractor Company</label>
               <select className="form-select" value={wrkForm.contractorId} onChange={e => setWrkForm({ ...wrkForm, contractorId: e.target.value })}>
                 <option value="">Select Contractor...</option>
                 {contractors.map(c => <option key={c.id} value={c.id}>{c.companyName} ({c.code || c.id})</option>)}

@@ -33,6 +33,7 @@ import {
   ArrowRight,
   MapPin,
   RefreshCw,
+  RotateCcw,
   SlidersHorizontal,
   Package,
   Check,
@@ -192,6 +193,10 @@ export function SupplierInventoryHub() {
     suppliers,
     stoneTypes,
     yardLocations,
+    yardsMaster,
+    zonesMaster,
+    racksBaysMaster,
+    labelTemplatesMaster,
     showToast
   } = useApp();
 
@@ -219,6 +224,24 @@ export function SupplierInventoryHub() {
   const [isTraceOpen, setIsTraceOpen] = useState(false);
   const [activeLabelToPrint, setActiveLabelToPrint] = useState(null);
   const [isScanOpen, setIsScanOpen] = useState(false);
+
+  // Interactive Yard Map State
+  const [yardFilter, setYardFilter] = useState('All');
+  const [zoneFilter, setZoneFilter] = useState('All');
+  const [inspectingBay, setInspectingBay] = useState(null);
+
+  // Label Studio State
+  const [isLabelStudioOpen, setIsLabelStudioOpen] = useState(false);
+  const [labelCategoryFilter, setLabelCategoryFilter] = useState('All');
+  const [selectedLabelItemId, setSelectedLabelItemId] = useState('');
+  const [selectedLabelTemplateId, setSelectedLabelTemplateId] = useState('TMP-001');
+  const [labelPrintQty, setLabelPrintQty] = useState(1);
+  const [labelOptions, setLabelOptions] = useState({
+    showLogo: true,
+    showBarcode: true,
+    showQR: true,
+    showQuarry: true
+  });
 
   // FormDrawer state
   const [drawerMode, setDrawerMode] = useState(null); // 'add' | 'edit' | null
@@ -259,13 +282,13 @@ export function SupplierInventoryHub() {
       case 'blocks':
         return { title: 'Raw Blocks Inventory', actionLabel: 'Register Raw Block', actionType: 'block' };
       case 'qc1_pending':
-        return { title: 'QC 1 Pending Inspection Queue', actionLabel: 'Perform QC 1', actionType: 'qc1' };
+        return { title: 'QC 1 Pending Inspection Queue', actionLabel: null, actionType: null };
       case 'qc1_inspections':
-        return { title: 'QC 1 Inspection Records', actionLabel: 'New QC 1 Inspection', actionType: 'qc1' };
+        return { title: 'QC 1 Inspection Records', actionLabel: null, actionType: null };
       case 'qc2_pending':
-        return { title: 'QC 2 Pending Inspection Queue', actionLabel: 'Perform QC 2', actionType: 'qc2' };
+        return { title: 'QC 2 Pending Inspection Queue', actionLabel: null, actionType: null };
       case 'qc2_inspections':
-        return { title: 'QC 2 Inspection Records (Slabs & Lots)', actionLabel: 'New QC 2 Inspection', actionType: 'qc2' };
+        return { title: 'QC 2 Inspection Records (Slabs & Lots)', actionLabel: null, actionType: null };
       case 'qc_results':
         return { title: 'Quality Control Summary & Results', actionLabel: null, actionType: null };
       case 'material':
@@ -289,7 +312,11 @@ export function SupplierInventoryHub() {
       case 'transfer':
         return { title: 'Inter-Yard Stock Transfers', actionLabel: 'Record Transfer', actionType: 'putaway' };
       case 'gen_label':
-        return { title: 'Generate Product Tags & Barcodes', actionLabel: null, actionType: null };
+        return {
+          title: 'Generate Product Tags & Barcodes',
+          actionLabel: 'Generate Label',
+          actionType: 'gen_label_drawer'
+        };
       case 'print':
         return { title: 'Label Print Queue', actionLabel: null, actionType: null };
       case 'reprint':
@@ -444,19 +471,20 @@ export function SupplierInventoryHub() {
         remarks: ''
       });
     } else if (type === 'qc1') {
+      const targetBlock = qc1PendingBlocks[0] || detailedRawBlocks.find(b => b.id === selectedBlockId) || detailedRawBlocks[0];
       setFormData({
-        blockId: selectedBlockId || detailedRawBlocks[0]?.id || 'BLK-0001',
+        blockId: targetBlock?.id || 'BLK-0001',
         inspector: currentUser.name,
         colorMatch: 'Uniform Deep Color',
         veining: 'Natural Consistent Veining',
         cracks: 'None',
         stains: 'None',
         moisture: 'Dry (1.0%)',
-        sizeCheck: 'Verified dimensions match challan',
+        sizeCheck: targetBlock ? `${targetBlock.length}" x ${targetBlock.width}" x ${targetBlock.height}" verified` : 'Verified dimensions match challan',
         defectType: 'None',
         defectLocation: 'N/A',
         defectSeverity: 'None',
-        grade: 'Grade A',
+        grade: targetBlock?.grade || 'Grade A',
         result: 'Pass',
         remarks: ''
       });
@@ -492,11 +520,12 @@ export function SupplierInventoryHub() {
         remarks: ''
       });
     } else if (type === 'qc2') {
+      const targetSlab = qc2PendingSlabs[0] || slabs[0];
       setFormData({
-        lotId: lots[0]?.id || 'LOT-0001',
-        slabId: slabs[0]?.id || 'SLB-0001',
+        lotId: targetSlab?.lotId || lots[0]?.id || 'LOT-0001',
+        slabId: targetSlab?.id || 'SLB-0001',
         inspector: currentUser.name,
-        thicknessCheck: '20mm (+/- 0.2mm precision)',
+        thicknessCheck: `${targetSlab?.thickness || 20}mm (+/- 0.2mm precision)`,
         flatness: 'Flat (no bowing or warping)',
         edges: 'Crisp Arris, no chipping',
         surface: 'Mirror Polish (>90 Gloss)',
@@ -505,7 +534,7 @@ export function SupplierInventoryHub() {
         resinQuality: 'Fully Cured and clear',
         defectType: 'None',
         defectCount: 0,
-        grade: 'Grade A',
+        grade: targetSlab?.grade || 'Grade A',
         result: 'Pass',
         remarks: ''
       });
@@ -567,7 +596,178 @@ export function SupplierInventoryHub() {
     setDrawerType(type);
     setDrawerMode('edit');
     setEditingItem(item);
-    setFormData({ ...item });
+    setFormData({
+      ...item,
+      blockId: item.blockId || (item.stage?.includes('QC 1') ? item.target : item.blockId),
+      slabId: item.slabId || (item.stage?.includes('QC 2') ? item.target : item.slabId)
+    });
+  };
+
+  // Quick Pass QC 1 for a pending block
+  const handleQuickPassQC1 = (block, grade = 'Grade A') => {
+    addQC1Inspection({
+      blockId: block.id,
+      inspector: currentUser.name,
+      date: new Date().toISOString().slice(0, 10),
+      colorMatch: 'Uniform Deep Color',
+      veining: 'Natural Consistent Veining',
+      cracks: 'None',
+      stains: 'None',
+      moisture: 'Dry (1.0%)',
+      sizeCheck: `${block.length}" x ${block.width}" x ${block.height}" verified`,
+      defectType: 'None',
+      defectLocation: 'N/A',
+      defectSeverity: 'None',
+      grade: grade,
+      result: 'Pass',
+      remarks: 'Passed from QC 1 Pending Queue'
+    });
+  };
+
+  // Open QC 1 Drawer for a specific block
+  const openQC1ForBlock = (block) => {
+    setDrawerType('qc1');
+    setDrawerMode('add');
+    setEditingItem(null);
+    setFormData({
+      blockId: block.id,
+      inspector: currentUser.name,
+      date: new Date().toISOString().slice(0, 10),
+      colorMatch: 'Uniform Deep Color',
+      veining: 'Natural Consistent Veining',
+      cracks: 'None',
+      stains: 'None',
+      moisture: 'Dry (1.0%)',
+      sizeCheck: `${block.length}" x ${block.width}" x ${block.height}" verified`,
+      defectType: 'None',
+      defectLocation: 'N/A',
+      defectSeverity: 'None',
+      grade: block.grade || 'Grade A',
+      result: 'Pass',
+      remarks: ''
+    });
+  };
+
+  // Quick Reject or Rework QC 1
+  const handleQuickRejectQC1 = (block) => {
+    addQC1Inspection({
+      blockId: block.id,
+      inspector: currentUser.name,
+      date: new Date().toISOString().slice(0, 10),
+      result: 'Reject',
+      grade: 'Reject',
+      defectType: 'Structural Fissure / Flaw',
+      defectSeverity: 'Critical',
+      remarks: 'Rejected directly from Pending Queue'
+    });
+  };
+
+  const handleQuickReworkQC1 = (block) => {
+    addQC1Inspection({
+      blockId: block.id,
+      inspector: currentUser.name,
+      date: new Date().toISOString().slice(0, 10),
+      result: 'Rework',
+      grade: block.grade || 'Grade B',
+      defectType: 'Surface Staining / Minor Irregularity',
+      defectSeverity: 'Moderate',
+      remarks: 'Marked for Rework from Pending Queue'
+    });
+  };
+
+  // QC 2 Helpers
+  const handleQuickPassQC2 = (slab, grade = 'Grade A') => {
+    addQC2Inspection({
+      slabId: slab.id,
+      lotId: slab.lotId || '',
+      inspector: currentUser.name,
+      date: new Date().toISOString().slice(0, 10),
+      thicknessCheck: `${slab.thickness || 20}mm (+/- 0.2mm)`,
+      flatness: 'Flat (no warping)',
+      edges: 'Clean Arris, no chipping',
+      surface: 'Mirror Polish (>90 GU)',
+      colorMatch: 'Consistent with Lot',
+      cracks: 'None',
+      resinQuality: 'Fully Cured',
+      defectType: 'None',
+      defectCount: 0,
+      grade: grade,
+      result: 'Pass',
+      remarks: 'Passed from QC 2 Pending Queue'
+    });
+  };
+
+  const openQC2ForSlab = (slab) => {
+    setDrawerType('qc2');
+    setDrawerMode('add');
+    setEditingItem(null);
+    setFormData({
+      slabId: slab.id,
+      lotId: slab.lotId || '',
+      inspector: currentUser.name,
+      date: new Date().toISOString().slice(0, 10),
+      thicknessCheck: `${slab.thickness || 20}mm (+/- 0.2mm)`,
+      flatness: 'Flat (no warping)',
+      edges: 'Clean Arris, no chipping',
+      surface: 'Mirror Polish (>90 GU)',
+      colorMatch: 'Consistent with Lot',
+      cracks: 'None',
+      resinQuality: 'Fully Cured',
+      defectType: 'None',
+      defectCount: 0,
+      grade: slab.grade || 'Grade A',
+      result: 'Pass',
+      remarks: ''
+    });
+  };
+
+  const handleQuickRejectQC2 = (slab) => {
+    addQC2Inspection({
+      slabId: slab.id,
+      lotId: slab.lotId || '',
+      inspector: currentUser.name,
+      date: new Date().toISOString().slice(0, 10),
+      result: 'Reject',
+      grade: 'Reject',
+      defectType: 'Surface Defect / Crack',
+      defectCount: 1,
+      remarks: 'Rejected directly from QC 2 Pending Queue'
+    });
+  };
+
+  const handleQuickReworkQC2 = (slab) => {
+    addQC2Inspection({
+      slabId: slab.id,
+      lotId: slab.lotId || '',
+      inspector: currentUser.name,
+      date: new Date().toISOString().slice(0, 10),
+      result: 'Rework',
+      grade: slab.grade || 'Grade B',
+      defectType: 'Dull Polish / Uneven Surface',
+      defectCount: 1,
+      remarks: 'Returned to Polish Line for Rework'
+    });
+  };
+
+  // Send Block to QC 1 Queue
+  const handleSendToQC1 = (block) => {
+    if (!block || !block.id) return;
+    updateDetailedRawBlock(block.id, {
+      status: 'In QC 1',
+      currentStep: 2
+    });
+    showToast(`Block ${block.blockNo || block.id} added to QC 1 Pending Queue`);
+    setSearchParams({ submenu: 'qc', tab: 'qc1_pending' });
+  };
+
+  // Send Slab to QC 2 Queue
+  const handleSendToQC2 = (slab) => {
+    if (!slab || !slab.id) return;
+    updateSlab(slab.id, {
+      status: 'In QC 2'
+    });
+    showToast(`Slab ${slab.slabNo || slab.id} added to QC 2 Pending Queue`);
+    setSearchParams({ submenu: 'qc', tab: 'qc2_pending' });
   };
 
   const closeDrawer = () => {
@@ -783,7 +983,11 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Trace Lineage', icon: Search, onClick: () => openTrace(r.id) },
+            ...(r.stage === 'Block' ? [
+              { label: 'Add to QC 1', icon: ShieldCheck, onClick: () => handleSendToQC1(r.rawItem || r) }
+            ] : r.stage === 'Slab' ? [
+              { label: 'Add to QC 2', icon: ShieldCheck, onClick: () => handleSendToQC2(r.rawItem || r) }
+            ] : []),
             { label: 'Print / Reprint Label', icon: Printer, onClick: () => openPrintLabel(r.rawItem, r.stage) },
             { label: 'Edit Record', icon: Edit3, onClick: () => openEditDrawer(r.stage === 'Block' ? 'block' : r.stage === 'Slab' ? 'slab' : 'cut', r.rawItem) },
             {
@@ -816,7 +1020,6 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Trace Record', icon: Search, onClick: () => openTrace(r.id) },
             { label: 'Edit Entry', icon: Edit3, onClick: () => openEditDrawer('gate', r) },
             {
               label: 'Archive Entry',
@@ -857,7 +1060,6 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Trace Weights', icon: Search, onClick: () => openTrace(r.id) },
             {
               label: 'Delete Ticket',
               icon: Trash2,
@@ -901,9 +1103,24 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Trace Lineage', icon: Search, onClick: () => openTrace(r.id) },
-            { label: 'Print Label', icon: Printer, onClick: () => openPrintLabel(r, 'Block') },
-            { label: 'Edit Block', icon: Edit3, onClick: () => openEditDrawer('block', r) },
+            {
+              label: 'Add to QC 1',
+              icon: ShieldCheck,
+              confirm: `Send Block ${r.blockNo || r.id} to QC 1 Pending Queue?`,
+              onClick: () => handleSendToQC1(r)
+            },
+            {
+              label: 'Print Label',
+              icon: Printer,
+              confirm: `Print label for Block ${r.blockNo || r.id}?`,
+              onClick: () => openPrintLabel(r, 'Block')
+            },
+            {
+              label: 'Edit Block',
+              icon: Edit3,
+              confirm: `Open editor for Block ${r.blockNo || r.id}?`,
+              onClick: () => openEditDrawer('block', r)
+            },
             {
               label: 'Archive Block',
               icon: Trash2,
@@ -917,10 +1134,183 @@ export function SupplierInventoryHub() {
     }
   ];
 
+  const lotsColumns = [
+    {
+      header: 'Item ID',
+      render: r => (
+        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--ink)' }}>
+          {r.id}
+        </span>
+      )
+    },
+    { header: 'Stone Type', accessor: 'stoneType' },
+    { header: 'Thickness', accessor: 'thickness' },
+    { header: 'Dimensions', accessor: 'size' },
+    { header: 'Finish', accessor: 'finish' },
+    { header: 'Grade', render: r => <span className="badge badge-soft">{r.grade}</span> },
+    { header: 'Pieces', render: r => <span className="table-num">{r.pieces}</span> },
+    { header: 'Total Sq.Ft', render: r => <span className="table-num" style={{ fontWeight: 600 }}>{r.sqft}</span> },
+    { header: 'Yard & Location', accessor: 'location' },
+    { header: 'Box / Pallet', accessor: 'box' },
+    { header: 'Status', render: r => <StatusBadge status={r.status} /> },
+    {
+      header: 'Actions',
+      align: 'right',
+      render: r => {
+        const slabItem = r.rawItem || r;
+        return (
+          <ActionDropdown
+            items={[
+              {
+                label: 'Add to QC 2',
+                icon: ShieldCheck,
+                confirm: `Send Slab ${slabItem.slabNo || slabItem.id} to QC 2 Pending Queue?`,
+                onClick: () => handleSendToQC2(slabItem)
+              },
+              {
+                label: 'Print / Reprint Label',
+                icon: Printer,
+                confirm: `Print label for Slab ${slabItem.id}?`,
+                onClick: () => openPrintLabel(slabItem, 'Slab')
+              },
+              {
+                label: 'Edit Record',
+                icon: Edit3,
+                confirm: `Open editor for Slab ${slabItem.id}?`,
+                onClick: () => openEditDrawer('slab', slabItem)
+              },
+              {
+                label: 'Archive Record',
+                icon: Trash2,
+                danger: true,
+                confirm: `Archive Slab ${r.id}?`,
+                onClick: () => handleDeleteItem('slab', r.id)
+              }
+            ]}
+          />
+        );
+      }
+    }
+  ];
+
+  const qc1PendingColumns = [
+    { header: 'Block No', render: r => <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{r.blockNo}</span> },
+    { header: 'Stone Type', accessor: 'stoneType' },
+    { header: 'Quarry / Supplier', accessor: 'quarrySupplier' },
+    { header: 'Dimensions', render: r => `${r.length}" x ${r.width}" x ${r.height}"` },
+    { header: 'Net Weight', render: r => <span className="table-num">{r.netWeight} Tons</span> },
+    { header: 'Est. Sq.Ft', render: r => <span className="table-num" style={{ fontWeight: 600, color: 'var(--emerald-text)' }}>{r.estimatedSqFt}</span> },
+    { header: 'Status', render: r => <StatusBadge status={r.status} /> },
+    {
+      header: 'Actions',
+      align: 'right',
+      render: r => (
+        <ActionDropdown
+          items={[
+            {
+              label: 'Pass to Inspection (Grade A)',
+              icon: CheckCircle2,
+              confirm: `Pass Block ${r.blockNo} with Grade A and record in QC 1 Inspections?`,
+              onClick: () => handleQuickPassQC1(r, 'Grade A')
+            },
+            {
+              label: 'Pass to Inspection (Grade B)',
+              icon: CheckCircle2,
+              confirm: `Pass Block ${r.blockNo} with Grade B and record in QC 1 Inspections?`,
+              onClick: () => handleQuickPassQC1(r, 'Grade B')
+            },
+            {
+              label: 'Open Detailed Inspection',
+              icon: ShieldCheck,
+              confirm: `Open detailed QC 1 inspection worksheet for Block ${r.blockNo}?`,
+              onClick: () => openQC1ForBlock(r)
+            },
+            {
+              label: 'Mark for Rework',
+              icon: RotateCcw,
+              confirm: `Mark Block ${r.blockNo} for rework?`,
+              onClick: () => handleQuickReworkQC1(r)
+            },
+            {
+              label: 'Reject Block',
+              icon: X,
+              danger: true,
+              confirm: `Reject Block ${r.blockNo} and move to Defect Store?`,
+              onClick: () => handleQuickRejectQC1(r)
+            },
+            {
+              label: 'Print Label',
+              icon: Printer,
+              confirm: `Print label for Block ${r.blockNo}?`,
+              onClick: () => openPrintLabel(r, 'Block')
+            }
+          ]}
+        />
+      )
+    }
+  ];
+
+  const qc2PendingColumns = [
+    { header: 'Slab No', render: r => <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{r.slabNo || r.id}</span> },
+    { header: 'Stone Type', accessor: 'stoneType' },
+    { header: 'Lot / Block', render: r => `${r.lotId || '-'} / ${r.blockId || '-'}` },
+    { header: 'Dimensions', render: r => `${r.length}" x ${r.width}"` },
+    { header: 'Thickness', render: r => `${r.thickness}mm` },
+    { header: 'Sq.Ft', render: r => <span className="table-num">{r.sqft}</span> },
+    { header: 'Status', render: r => <StatusBadge status={r.status} /> },
+    {
+      header: 'Actions',
+      align: 'right',
+      render: r => (
+        <ActionDropdown
+          items={[
+            {
+              label: 'Pass to Inspection (Grade A)',
+              icon: CheckCircle2,
+              confirm: `Pass Slab ${r.slabNo || r.id} with Grade A and record in QC 2 Inspections?`,
+              onClick: () => handleQuickPassQC2(r, 'Grade A')
+            },
+            {
+              label: 'Pass to Inspection (Grade B)',
+              icon: CheckCircle2,
+              confirm: `Pass Slab ${r.slabNo || r.id} with Grade B and record in QC 2 Inspections?`,
+              onClick: () => handleQuickPassQC2(r, 'Grade B')
+            },
+            {
+              label: 'Open Detailed Inspection',
+              icon: ShieldCheck,
+              confirm: `Open detailed QC 2 inspection worksheet for Slab ${r.slabNo || r.id}?`,
+              onClick: () => openQC2ForSlab(r)
+            },
+            {
+              label: 'Return for Re-polishing',
+              icon: RotateCcw,
+              confirm: `Return Slab ${r.slabNo || r.id} for re-polishing?`,
+              onClick: () => handleQuickReworkQC2(r)
+            },
+            {
+              label: 'Reject Slab',
+              icon: X,
+              danger: true,
+              confirm: `Reject Slab ${r.slabNo || r.id}?`,
+              onClick: () => handleQuickRejectQC2(r)
+            },
+            {
+              label: 'Print Label',
+              icon: Printer,
+              confirm: `Print label for Slab ${r.slabNo || r.id}?`,
+              onClick: () => openPrintLabel(r, 'Slab')
+            }
+          ]}
+        />
+      )
+    }
+  ];
+
   const qcInspectionsColumns = [
     { header: 'Inspection No', render: r => <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{r.inspectionNo}</span> },
     { header: 'Target Item', render: r => <strong>{r.target || r.blockId || r.slabId || r.lotId}</strong> },
-    { header: 'Stage', render: r => <span className="badge badge-soft">{r.stage || 'Inspection'}</span> },
+    { header: 'Stage', render: r => <span className="badge badge-soft">{r.stage || (r.blockId ? 'QC 1 (Block)' : 'QC 2 (Slab)')}</span> },
     { header: 'Inspector', accessor: 'inspector' },
     { header: 'Date', accessor: 'date' },
     { header: 'Grade', render: r => <span className="badge badge-soft">{r.grade}</span> },
@@ -929,13 +1319,63 @@ export function SupplierInventoryHub() {
     {
       header: 'Actions',
       align: 'right',
-      render: r => (
-        <ActionDropdown
-          items={[
-            { label: 'Trace Item', icon: Search, onClick: () => openTrace(r.target || r.blockId || r.slabId || r.lotId) }
-          ]}
-        />
-      )
+      render: r => {
+        const isQC1 = r.stage?.includes('QC 1') || Boolean(r.blockId);
+        const itemType = isQC1 ? 'qc1' : 'qc2';
+        return (
+          <ActionDropdown
+            items={[
+              {
+                label: 'Edit Inspection',
+                icon: Edit3,
+                onClick: () => openEditDrawer(itemType, r)
+              },
+              {
+                label: 'Mark as Passed',
+                icon: CheckCircle2,
+                disabled: r.result === 'Pass',
+                onClick: () => {
+                  if (isQC1) updateQC1Inspection(r.id, { result: 'Pass', grade: r.grade || 'Grade A' });
+                  else updateQC2Inspection(r.id, { result: 'Pass', grade: r.grade || 'Grade A' });
+                }
+              },
+              {
+                label: 'Mark for Rework',
+                icon: RotateCcw,
+                disabled: r.result === 'Rework',
+                onClick: () => {
+                  if (isQC1) updateQC1Inspection(r.id, { result: 'Rework' });
+                  else updateQC2Inspection(r.id, { result: 'Rework' });
+                }
+              },
+              {
+                label: 'Mark as Rejected',
+                icon: X,
+                danger: true,
+                disabled: r.result === 'Reject',
+                confirm: `Change inspection ${r.inspectionNo} to Rejected?`,
+                onClick: () => {
+                  if (isQC1) updateQC1Inspection(r.id, { result: 'Reject' });
+                  else updateQC2Inspection(r.id, { result: 'Reject' });
+                }
+              },
+              {
+                label: 'Print QC Tag',
+                icon: Printer,
+                confirm: `Print QC inspection tag for ${r.inspectionNo}?`,
+                onClick: () => openPrintLabel(r, isQC1 ? 'Block' : 'Slab')
+              },
+              {
+                label: 'Archive Inspection',
+                icon: Trash2,
+                danger: true,
+                confirm: `Archive inspection record ${r.inspectionNo}?`,
+                onClick: () => handleDeleteItem(itemType, r.id)
+              }
+            ]}
+          />
+        );
+      }
     }
   ];
 
@@ -958,8 +1398,19 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Trace Target', icon: Search, onClick: () => openTrace(r.blockId || r.slabLotId) },
-            { label: 'Edit Job', icon: Edit3, onClick: () => openEditDrawer('material', r) }
+            {
+              label: 'Edit Job',
+              icon: Edit3,
+              confirm: `Edit material job ${r.jobNo}?`,
+              onClick: () => openEditDrawer('material', r)
+            },
+            {
+              label: 'Delete Job',
+              icon: Trash2,
+              danger: true,
+              confirm: `Delete material application job ${r.jobNo}?`,
+              onClick: () => handleDeleteItem('material', r.id)
+            }
           ]}
         />
       )
@@ -992,8 +1443,19 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Trace Lot', icon: Search, onClick: () => openTrace(r.lotId) },
-            { label: 'Edit Job', icon: Edit3, onClick: () => openEditDrawer('slicing', r) }
+            {
+              label: 'Edit Job',
+              icon: Edit3,
+              confirm: `Edit slicing job ${r.jobNo}?`,
+              onClick: () => openEditDrawer('slicing', r)
+            },
+            {
+              label: 'Delete Job',
+              icon: Trash2,
+              danger: true,
+              confirm: `Delete slicing job ${r.jobNo}?`,
+              onClick: () => handleDeleteItem('slicing', r.id)
+            }
           ]}
         />
       )
@@ -1017,7 +1479,19 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Trace Source Slab', icon: Search, onClick: () => openTrace(r.slabId) }
+            {
+              label: 'Edit Job',
+              icon: Edit3,
+              confirm: `Edit cut-to-size job ${r.jobNo}?`,
+              onClick: () => openEditDrawer('cut', r)
+            },
+            {
+              label: 'Delete Job',
+              icon: Trash2,
+              danger: true,
+              confirm: `Delete cut-to-size job ${r.jobNo}?`,
+              onClick: () => handleDeleteItem('cut', r.id)
+            }
           ]}
         />
       )
@@ -1041,9 +1515,18 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Trace Box', icon: Search, onClick: () => openTrace(r.id) },
-            { label: 'Print Label', icon: Printer, onClick: () => openPrintLabel(r, 'Box') },
-            { label: 'Edit Box', icon: Edit3, onClick: () => openEditDrawer('box', r) },
+            {
+              label: 'Print Label',
+              icon: Printer,
+              confirm: `Print label for box ${r.boxNo || r.id}?`,
+              onClick: () => openPrintLabel(r, 'Box')
+            },
+            {
+              label: 'Edit Box',
+              icon: Edit3,
+              confirm: `Edit box ${r.boxNo || r.id}?`,
+              onClick: () => openEditDrawer('box', r)
+            },
             {
               label: 'Delete Box',
               icon: Trash2,
@@ -1074,13 +1557,17 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Print / Reprint Label', icon: Printer, onClick: () => setActiveLabelToPrint(r) },
-            { label: 'Trace Linked Record', icon: Search, onClick: () => openTrace(r.linkedRecordId) },
+            {
+              label: 'Print / Reprint Label',
+              icon: Printer,
+              confirm: `Reprint physical barcode / QR tag for ${r.labelNo} (${r.stoneType})?`,
+              onClick: () => setActiveLabelToPrint(r)
+            },
             {
               label: 'Archive Label',
               icon: Trash2,
               danger: true,
-              confirm: `Archive Label ${r.id}?`,
+              confirm: `Archive Label ${r.labelNo || r.id}?`,
               onClick: () => handleDeleteItem('label', r.id)
             }
           ]}
@@ -1105,7 +1592,13 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
-            { label: 'Trace Defective Item', icon: Search, onClick: () => openTrace(r.item) }
+            {
+              label: 'Archive Record',
+              icon: Trash2,
+              danger: true,
+              confirm: `Archive defect record ${r.defectNo}?`,
+              onClick: () => handleDeleteItem('defect', r.id)
+            }
           ]}
         />
       )
@@ -1137,9 +1630,13 @@ export function SupplierInventoryHub() {
         <ActionDropdown
           items={[
             ...(r.status !== 'Approved' ? [
-              { label: 'Approve Adjustment', icon: CheckCircle2, onClick: () => approveCountSheet(r.id) }
+              {
+                label: 'Approve Adjustment',
+                icon: CheckCircle2,
+                confirm: `Approve count sheet adjustment for ${r.countSheetNo || r.id}?`,
+                onClick: () => approveCountSheet(r.id)
+              }
             ] : []),
-            { label: 'Trace Item', icon: Search, onClick: () => openTrace(r.item) },
             {
               label: 'Archive Sheet',
               icon: Trash2,
@@ -1155,9 +1652,9 @@ export function SupplierInventoryHub() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
-      {/* Tier 1: Top Sub-menus Bar (Clean white bar matching HRHub style) */}
+      {/* Top Secondary Tab Header - Displays ONLY the tabs for the active sub-menu selected from the sidebar */}
       <div style={{
-        padding: '10px 20px',
+        padding: '12px 20px',
         borderBottom: '1px solid var(--line)',
         backgroundColor: 'var(--white)',
         display: 'flex',
@@ -1166,48 +1663,6 @@ export function SupplierInventoryHub() {
         alignItems: 'center',
         flexShrink: 0
       }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '4px' }}>
-          Sub Menu:
-        </span>
-        {SUB_MENUS.map(m => {
-          const Icon = m.icon;
-          const isActive = activeSubMenu === m.key;
-          return (
-            <button
-              key={m.key}
-              type="button"
-              className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => handleSubMenuChange(m.key)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                whiteSpace: 'nowrap',
-                fontWeight: isActive ? 600 : 500,
-                fontSize: '13px'
-              }}
-            >
-              <Icon size={14} />
-              <span>{m.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Tier 2: Tabs Bar under active Sub-menu */}
-      <div style={{
-        padding: '8px 20px',
-        borderBottom: '1px solid var(--line)',
-        backgroundColor: 'var(--white)',
-        display: 'flex',
-        gap: '6px',
-        overflowX: 'auto',
-        alignItems: 'center',
-        flexShrink: 0
-      }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: '4px' }}>
-          Tabs:
-        </span>
         {currentSubMenuObj.tabs.map(t => {
           const isActive = activeTab === t.key;
           return (
@@ -1219,8 +1674,7 @@ export function SupplierInventoryHub() {
               style={{
                 whiteSpace: 'nowrap',
                 fontWeight: isActive ? 600 : 500,
-                fontSize: '12px',
-                padding: '4px 10px'
+                fontSize: '13px'
               }}
             >
               {t.label}
@@ -1233,24 +1687,25 @@ export function SupplierInventoryHub() {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div className="page-wrapper">
           {/* Header Row: Title & Action Buttons (matching Attendance module pattern) */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div>
               <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--ink)' }}>
                 {activeTabMeta.title}
               </h2>
-              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
-                Inventory &bull; {currentSubMenuObj.label} &bull; {currentSubMenuObj.tabs.find(t => t.key === activeTab)?.label || activeTab}
-              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => setIsScanOpen(true)}>
-                <QrCode size={14} />
-                <span>Scan Tag</span>
-              </button>
-
               {activeTabMeta.actionLabel && (
-                <button className="btn btn-primary btn-sm" onClick={() => openAddDrawer(activeTabMeta.actionType)}>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => {
+                    if (activeTabMeta.actionType === 'gen_label_drawer') {
+                      setIsLabelStudioOpen(true);
+                    } else {
+                      openAddDrawer(activeTabMeta.actionType);
+                    }
+                  }}
+                >
                   <Plus size={14} />
                   <span>{activeTabMeta.actionLabel}</span>
                 </button>
@@ -1258,113 +1713,8 @@ export function SupplierInventoryHub() {
             </div>
           </div>
 
-          {/* Collapsible Workflow Process StepTracker */}
-          <div style={{
-            backgroundColor: 'var(--white)',
-            border: '1px solid var(--line)',
-            borderRadius: 'var(--r-8)',
-            padding: '10px 14px',
-            marginBottom: '16px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Activity size={14} style={{ color: 'var(--teal-600)' }} />
-                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>Process Workflow Tracker:</span>
-                <select
-                  className="form-select"
-                  value={selectedBlockId}
-                  onChange={e => setSelectedBlockId(e.target.value)}
-                  style={{ width: 'auto', height: '28px', fontSize: '12px', fontWeight: 600, padding: '2px 8px' }}
-                >
-                  {detailedRawBlocks.map(b => (
-                    <option key={b.id} value={b.id}>
-                      {b.blockNo} - {b.stoneType} ({b.status})
-                    </option>
-                  ))}
-                </select>
-              </div>
 
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <button className="btn btn-xs btn-secondary" onClick={() => openTrace(selectedBlockId)}>
-                  <Eye size={12} />
-                  <span>Trace Lineage</span>
-                </button>
-                <button
-                  className="btn btn-xs btn-ghost"
-                  onClick={() => setShowWorkflowTracker(!showWorkflowTracker)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}
-                >
-                  <span>{showWorkflowTracker ? 'Hide 10-Step Flow' : 'Show 10-Step Flow'}</span>
-                  {showWorkflowTracker ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                </button>
-              </div>
-            </div>
 
-            {showWorkflowTracker && (
-              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--line)' }}>
-                <StepTracker
-                  currentStep={selectedBlock?.currentStep || 2}
-                  status={selectedBlock?.status || 'Received'}
-                  onStepClick={handleStepClick}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Submenu-specific KPI StatCards */}
-          {activeSubMenu === 'inbound' && (
-            <div className="stats-grid" style={{ marginBottom: '16px' }}>
-              <StatCard label="Gate Entries" value={`${gateEntries.length} Recorded`} icon={Truck} subtext="Truck arrivals at security gate" />
-              <StatCard label="Weighbridge Tickets" value={`${weighbridgeTickets.length} Tickets`} icon={Scale} subtext="Gross, tare & net weighments" />
-              <StatCard label="Raw Blocks Received" value={`${detailedRawBlocks.length} Blocks`} icon={Box} subtext="Quarry blocks unloaded in yard" />
-              <StatCard label="Total Block Tonnage" value={`${kpiTotals.blockTons} MT`} icon={Layers} subtext="Net verified block weight" />
-            </div>
-          )}
-
-          {activeSubMenu === 'qc' && (
-            <div className="stats-grid" style={{ marginBottom: '16px' }}>
-              <StatCard label="QC 1 Pending" value={`${qc1PendingBlocks.length} Blocks`} icon={AlertTriangle} subtext="Raw block inspection queue" />
-              <StatCard label="QC 1 Passed" value={`${qc1PassedCount} Blocks`} icon={CheckCircle2} subtext="Approved for processing/slicing" />
-              <StatCard label="QC 2 Pending" value={`${qc2PendingSlabs.length} Slabs`} icon={Clock} subtext="Slabs awaiting final QA inspection" />
-              <StatCard label="QC 2 Passed" value={`${qc2PassedCount} Slabs`} icon={ShieldCheck} subtext="Ready for storage / sale allocation" />
-            </div>
-          )}
-
-          {activeSubMenu === 'processing' && (
-            <div className="stats-grid" style={{ marginBottom: '16px' }}>
-              <StatCard label="Material Applications" value={`${materialJobs.length} Jobs`} icon={Activity} subtext="Resin, mesh & chemical coats" />
-              <StatCard label="Slicing Operations" value={`${slicingJobs.length} Runs`} icon={Scissors} subtext="Gangsaw block cutting jobs" />
-              <StatCard label="Cut to Size Jobs" value={`${cutToSizeJobs.length} Jobs`} icon={Box} subtext="Bridge saw precision cutting" />
-              <StatCard label="Total Yield Output" value={`${(Number(kpiTotals.slabSqFt) + Number(kpiTotals.pieceSqFt)).toFixed(1)} Sq.Ft`} icon={Layers} subtext="Total processed surface area" />
-            </div>
-          )}
-
-          {activeSubMenu === 'storage' && (
-            <div className="stats-grid" style={{ marginBottom: '16px' }}>
-              <StatCard label="Boxes & Pallets" value={`${boxes.length} Units`} icon={Box} subtext="Stored across yard bays & A-frames" />
-              <StatCard label="Internal Moves" value={`${storageMovements.length} Movements`} icon={Move} subtext="Bay & box relocations logged" />
-              <StatCard label="Labels Generated" value={`${labels.length} Active`} icon={QrCode} subtext="QR & barcode tracking tags" />
-              <StatCard label="Label Prints Log" value={`${totalLabelsCount} Printed`} icon={Printer} subtext="Total physical print count" />
-            </div>
-          )}
-
-          {activeSubMenu === 'stock' && (
-            <div className="stats-grid" style={{ marginBottom: '16px' }}>
-              <StatCard label="Blocks Stock" value={`${kpiTotals.blockTons} MT`} icon={Box} subtext="Raw inflow & QC 1 passed" />
-              <StatCard label="Slabs Stock" value={`${kpiTotals.slabSqFt} Sq.Ft`} icon={Layers} subtext="Gangsaw sliced & polished" />
-              <StatCard label="Pieces Stock" value={`${kpiTotals.pieceSqFt} Sq.Ft`} icon={Scissors} subtext="Cut-to-size dimensional tiles" />
-              <StatCard label="Defective Store" value={`${kpiTotals.defective} Records`} icon={AlertTriangle} subtext="QC rejects & rework pool" />
-            </div>
-          )}
-
-          {activeSubMenu === 'exceptions' && (
-            <div className="stats-grid" style={{ marginBottom: '16px' }}>
-              <StatCard label="Defective Pool" value={`${kpiTotals.defective} Records`} icon={AlertTriangle} subtext="Segregated non-conforming items" />
-              <StatCard label="Rework Queue" value={`${reworkCount} Items`} icon={RefreshCw} subtext="Items flagged for re-processing" />
-              <StatCard label="Scrap / Write-off" value={`${defectStoreRecords.filter(d => d.action === 'Scrap').length} Records`} icon={Trash2} subtext="Scrapped & write-off material losses" />
-              <StatCard label="Audit Variances" value={`${varianceSheets.length} Variances`} icon={FileText} subtext="Physical count audit discrepancies" />
-            </div>
-          )}
 
       {/* ==================================================== */}
       {/* SUB MENU 1: INBOUND                                  */}
@@ -1403,81 +1753,43 @@ export function SupplierInventoryHub() {
       {activeSubMenu === 'qc' && (
         <>
           {activeTab === 'qc1_pending' && (
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '8px' }}>
-                Blocks Pending Initial QC 1 ({qc1PendingBlocks.length})
-              </div>
-              <DataTable
-                columns={rawBlockColumns}
-                data={qc1PendingBlocks}
-                emptyMessage="No blocks pending QC 1."
-              />
-            </div>
+            <DataTable
+              columns={qc1PendingColumns}
+              data={qc1PendingBlocks}
+              emptyMessage="No blocks pending QC 1."
+            />
           )}
 
           {activeTab === 'qc1_inspections' && (
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '8px' }}>
-                QC 1 Block Inspections Log ({qc1Inspections.length})
-              </div>
-              <DataTable
-                columns={qcInspectionsColumns}
-                data={qc1Inspections.map(q => ({ ...q, target: q.blockId, stage: 'QC 1 (Block)' }))}
-                emptyMessage="No QC 1 inspections recorded."
-              />
-            </div>
+            <DataTable
+              columns={qcInspectionsColumns}
+              data={qc1Inspections.filter(q => !q.isArchived).map(q => ({ ...q, target: q.blockId, stage: 'QC 1 (Block)' }))}
+              emptyMessage="No QC 1 inspections recorded."
+            />
           )}
 
           {activeTab === 'qc2_pending' && (
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '8px' }}>
-                Slabs Pending QC 2 Polishing Inspection ({qc2PendingSlabs.length})
-              </div>
-              <DataTable
-                columns={stockGridColumns.filter(c => c.header !== 'Stage')}
-                data={qc2PendingSlabs.map(s => ({
-                  id: s.id,
-                  stoneType: s.stoneType,
-                  thickness: `${s.thickness}mm`,
-                  size: `${s.length}" x ${s.width}"`,
-                  finish: 'Polished',
-                  grade: s.grade,
-                  pieces: 1,
-                  sqft: s.sqft,
-                  location: s.location,
-                  box: s.boxId || 'Loose',
-                  status: s.status,
-                  rawItem: s
-                }))}
-                emptyMessage="No slabs pending QC 2."
-              />
-            </div>
+            <DataTable
+              columns={qc2PendingColumns}
+              data={qc2PendingSlabs}
+              emptyMessage="No slabs pending QC 2."
+            />
           )}
 
           {activeTab === 'qc2_inspections' && (
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '8px' }}>
-                QC 2 Slab Inspections Log ({qc2Inspections.length})
-              </div>
-              <DataTable
-                columns={qcInspectionsColumns}
-                data={qc2Inspections.map(q => ({ ...q, target: q.slabId || q.lotId, stage: 'QC 2 (Slab)' }))}
-                emptyMessage="No QC 2 inspections recorded."
-              />
-            </div>
+            <DataTable
+              columns={qcInspectionsColumns}
+              data={qc2Inspections.filter(q => !q.isArchived).map(q => ({ ...q, target: q.slabId || q.lotId, stage: 'QC 2 (Slab)' }))}
+              emptyMessage="No QC 2 inspections recorded."
+            />
           )}
 
           {activeTab === 'qc_results' && (
-            <div>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '8px' }}>
-                All Quality Control Outcomes ({combinedQCResults.length})
-              </div>
-              <DataTable
-                columns={qcInspectionsColumns}
-                data={combinedQCResults}
-                emptyMessage="No quality control results logged."
-              />
-            </div>
+            <DataTable
+              columns={qcInspectionsColumns}
+              data={combinedQCResults.filter(q => !q.isArchived)}
+              emptyMessage="No quality control results logged."
+            />
           )}
         </>
       )}
@@ -1488,24 +1800,11 @@ export function SupplierInventoryHub() {
       {activeSubMenu === 'processing' && (
         <>
           {activeTab === 'material' && (
-            <div>
-              <div className="stats-grid" style={{ marginBottom: '16px' }}>
-                {materialsStock.map(m => (
-                  <StatCard
-                    key={m.id}
-                    label={`${m.type} Stock`}
-                    value={`${m.currentStock} ${m.unit}`}
-                    icon={ShieldCheck}
-                    subtext={`$${m.costPerUnit}/${m.unit} • ${m.name}`}
-                  />
-                ))}
-              </div>
-              <DataTable
-                columns={materialColumns}
-                data={materialJobs}
-                emptyMessage="No material application jobs logged."
-              />
-            </div>
+            <DataTable
+              columns={materialColumns}
+              data={materialJobs}
+              emptyMessage="No material application jobs logged."
+            />
           )}
 
           {activeTab === 'slicing' && (
@@ -1526,7 +1825,7 @@ export function SupplierInventoryHub() {
 
           {activeTab === 'lots' && (
             <DataTable
-              columns={stockGridColumns.filter(c => c.header !== 'Stage')}
+              columns={lotsColumns}
               data={slabs.map(s => ({
                 id: s.id,
                 stoneType: s.stoneType,
@@ -1574,60 +1873,693 @@ export function SupplierInventoryHub() {
       {activeSubMenu === 'storage' && (
         <>
           {activeTab === 'putaway' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>
-                  Items Ready for Location Putaway
-                </div>
-                <button className="btn btn-primary btn-sm" onClick={() => openAddDrawer('putaway')}>
-                  <Move size={14} />
-                  <span>Execute Putaway</span>
-                </button>
-              </div>
-              <DataTable
-                columns={stockGridColumns}
-                data={unifiedStockRows.filter(r => r.status === 'QC 2 Passed' || r.status === 'Sliced' || r.status === 'Received')}
-                emptyMessage="No items pending putaway."
-              />
-            </div>
+            <DataTable
+              columns={stockGridColumns}
+              data={unifiedStockRows.filter(r => r.status === 'QC 2 Passed' || r.status === 'Sliced' || r.status === 'Received')}
+              emptyMessage="No items pending putaway."
+            />
           )}
 
-          {activeTab === 'yard_map' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>
-                Yard Map & Utilization Visualizer
-              </div>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '14px'
-              }}>
-                {yardLocations.map(loc => {
-                  const utilPct = Math.min(100, Math.round(((loc.currentStock || 0) / (loc.capacityTonnes || 500)) * 100));
-                  return (
-                    <div key={loc.id} className="card" style={{ padding: '16px', borderLeft: `4px solid ${utilPct > 85 ? 'var(--ruby-text)' : 'var(--teal-600)'}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <div>
-                          <strong style={{ color: 'var(--ink)', fontSize: '14px' }}>{loc.zone} • {loc.bay}</strong>
-                          <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Type: {loc.type}</div>
-                        </div>
-                        <span className={`badge ${utilPct > 85 ? 'badge-ruby' : 'badge-emerald'}`}>
-                          {utilPct}% Utilized
-                        </span>
-                      </div>
-                      <div style={{ height: '6px', background: 'var(--line)', borderRadius: '3px', overflow: 'hidden', margin: '10px 0' }}>
-                        <div style={{ width: `${utilPct}%`, height: '100%', background: utilPct > 85 ? 'var(--ruby-text)' : 'var(--teal-600)' }} />
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)' }}>
-                        <span>Current: {loc.currentStock} MT</span>
-                        <span>Capacity: {loc.capacityTonnes} MT</span>
+          {activeTab === 'yard_map' && (() => {
+            const allYards = ['All', ...new Set(yardLocations.map(l => l.yard || 'Carrara Yard Main'))];
+            const allZones = ['All', ...new Set(yardLocations.map(l => l.zone))];
+
+            const filteredBays = yardLocations.filter(loc => {
+              const matchesYard = yardFilter === 'All' || (loc.yard || 'Carrara Yard Main') === yardFilter;
+              const matchesZone = zoneFilter === 'All' || loc.zone === zoneFilter;
+              return matchesYard && matchesZone;
+            });
+
+            const totalCap = filteredBays.reduce((acc, curr) => acc + (curr.capacityTonnes || 0), 0);
+            const totalStock = filteredBays.reduce((acc, curr) => acc + (curr.currentStock || 0), 0);
+            const overallPct = totalCap > 0 ? Math.round((totalStock / totalCap) * 100) : 0;
+            const criticalCount = filteredBays.filter(b => Math.round(((b.currentStock || 0) / (b.capacityTonnes || 500)) * 100) > 85).length;
+
+            const getItemsInBay = (loc) => {
+              const bName = (loc.bay || '').toLowerCase();
+              const zName = (loc.zone || '').toLowerCase();
+
+              const matchingBlocks = detailedRawBlocks.filter(b =>
+                (b.location && (b.location.toLowerCase().includes(bName) || b.location.toLowerCase().includes(zName)))
+              ).map(b => ({
+                id: b.id,
+                name: b.blockNo || b.id,
+                stage: 'Block',
+                category: 'Raw Block',
+                stoneType: b.stoneType,
+                dimensions: `${b.length}" x ${b.width}" x ${b.height}"`,
+                weightOrSqFt: `${b.netWeight || 0} MT`,
+                grade: b.grade || 'Grade A',
+                status: b.status,
+                rawItem: b
+              }));
+
+              const matchingSlabs = slabs.filter(s =>
+                (s.bay && s.bay.toLowerCase() === bName) ||
+                (s.location && s.location.toLowerCase().includes(bName))
+              ).map(s => ({
+                id: s.id,
+                name: s.slabNo || s.id,
+                stage: 'Slab',
+                category: 'Polished Slab',
+                stoneType: s.stoneType,
+                dimensions: `${s.length}" x ${s.width}" (${s.thickness || 20}mm)`,
+                weightOrSqFt: `${s.sqft || 0} Sq.Ft`,
+                grade: s.grade || 'Grade A',
+                status: s.status,
+                rawItem: s
+              }));
+
+              const matchingBoxes = boxes.filter(bx =>
+                (bx.bay && bx.bay.toLowerCase() === bName) ||
+                (bx.location && bx.location.toLowerCase().includes(bName))
+              ).map(bx => ({
+                id: bx.id,
+                name: bx.boxNo || bx.id,
+                stage: 'Box',
+                category: bx.type || 'Storage Box',
+                stoneType: bx.stoneType,
+                dimensions: `${bx.size || 'Standard Crate'}`,
+                weightOrSqFt: `${bx.pieceCount || 0} Items (${bx.sqft || 0} Sq.Ft)`,
+                grade: bx.grade || 'Grade A',
+                status: bx.status,
+                rawItem: bx
+              }));
+
+              const matchingPieces = pieces.filter(p =>
+                (p.bay && p.bay.toLowerCase() === bName) ||
+                (p.location && p.location.toLowerCase().includes(bName))
+              ).map(p => ({
+                id: p.id,
+                name: p.pieceNo || p.id,
+                stage: 'Piece',
+                category: 'Cut Piece',
+                stoneType: p.stoneType,
+                dimensions: `${p.size || `${p.length}" x ${p.width}"`}`,
+                weightOrSqFt: `${p.sqft || 0} Sq.Ft`,
+                grade: p.grade || 'Grade A',
+                status: p.status,
+                rawItem: p
+              }));
+
+              return [...matchingBlocks, ...matchingSlabs, ...matchingBoxes, ...matchingPieces];
+            };
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                {/* Spatial Metrics Strip with Tinted Background Colors */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                  {/* Metric 1: Active Storage Bays */}
+                  <div style={{
+                    padding: '16px 18px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '8px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                        Active Storage Bays
+                      </span>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '7px',
+                        background: '#e2e8f0',
+                        color: '#1e293b',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <Package size={15} />
                       </div>
                     </div>
-                  );
-                })}
+                    <div>
+                      <div style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>
+                        {filteredBays.length} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Bays Configured</span>
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px' }}>
+                        Across {allYards.length - 1} Yard Facilities Monitored
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Metric 2: Total Storage Capacity */}
+                  <div style={{
+                    padding: '16px 18px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                    border: '1px solid #bbf7d0',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '8px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', color: '#166534', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                        Total Storage Capacity
+                      </span>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '7px',
+                        background: '#bbf7d0',
+                        color: '#15803d',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <Scale size={15} />
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '22px', fontWeight: 800, color: '#14532d' }}>
+                        {totalCap.toLocaleString()} <span style={{ fontSize: '13px', color: '#166534', fontWeight: 500 }}>MT Metric Tonnes</span>
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: '#15803d', fontWeight: 600, marginTop: '2px' }}>
+                        {(totalCap - totalStock).toLocaleString()} MT Free Space Available
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Metric 3: Current Utilization */}
+                  <div style={{
+                    padding: '16px 18px',
+                    borderRadius: '12px',
+                    background: overallPct > 80
+                      ? 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)'
+                      : 'linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)',
+                    border: overallPct > 80 ? '1px solid #fecdd3' : '1px solid #99f6e4',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '8px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{
+                        fontSize: '11px',
+                        color: overallPct > 80 ? '#9f1239' : '#115e59',
+                        textTransform: 'uppercase',
+                        fontWeight: 700,
+                        letterSpacing: '0.04em'
+                      }}>
+                        Current Utilization
+                      </span>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '7px',
+                        background: overallPct > 80 ? '#fecdd3' : '#99f6e4',
+                        color: overallPct > 80 ? '#be123c' : '#0f766e',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <Activity size={15} />
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '22px', fontWeight: 800, color: overallPct > 80 ? '#881337' : '#134e4a' }}>
+                        {totalStock.toLocaleString()} MT <span style={{ fontSize: '14px', fontWeight: 700, color: overallPct > 80 ? '#be123c' : '#0f766e' }}>({overallPct}%)</span>
+                      </div>
+                      <div style={{ height: '6px', background: 'rgba(0,0,0,0.08)', borderRadius: '3px', overflow: 'hidden', marginTop: '6px' }}>
+                        <div style={{
+                          width: `${overallPct}%`,
+                          height: '100%',
+                          background: overallPct > 80 ? '#e11d48' : '#0d9488',
+                          borderRadius: '3px',
+                          transition: 'width 0.4s ease'
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Metric 4: Capacity Alert / Health */}
+                  <div style={{
+                    padding: '16px 18px',
+                    borderRadius: '12px',
+                    background: criticalCount > 0
+                      ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
+                      : 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                    border: criticalCount > 0 ? '1px solid #fde68a' : '1px solid #bfdbfe',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '8px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{
+                        fontSize: '11px',
+                        color: criticalCount > 0 ? '#92400e' : '#1e40af',
+                        textTransform: 'uppercase',
+                        fontWeight: 700,
+                        letterSpacing: '0.04em'
+                      }}>
+                        {criticalCount > 0 ? 'Near-Capacity Alert' : 'Capacity Health'}
+                      </span>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '7px',
+                        background: criticalCount > 0 ? '#fde68a' : '#bfdbfe',
+                        color: criticalCount > 0 ? '#b45309' : '#1d4ed8',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {criticalCount > 0 ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '22px', fontWeight: 800, color: criticalCount > 0 ? '#78350f' : '#172554' }}>
+                        {criticalCount > 0 ? `${criticalCount} Bay${criticalCount === 1 ? '' : 's'} > 85% Load` : 'All Bays Optimal'}
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: criticalCount > 0 ? '#92400e' : '#1e40af', marginTop: '2px' }}>
+                        {criticalCount === 0 ? 'Optimal Bay Load Distribution' : 'Action recommended for incoming trucks'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter Selector Strip with Clean Background */}
+                <div style={{
+                  padding: '12px 18px',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '14px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Facility:
+                    </span>
+                    {allYards.map(y => (
+                      <button
+                        key={y}
+                        type="button"
+                        onClick={() => setYardFilter(y)}
+                        style={{
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '5px 12px',
+                          fontSize: '12px',
+                          fontWeight: yardFilter === y ? 600 : 500,
+                          cursor: 'pointer',
+                          background: yardFilter === y ? '#222350' : '#f1f5f9',
+                          color: yardFilter === y ? '#ffffff' : '#475569',
+                          boxShadow: yardFilter === y ? '0 1px 3px rgba(34, 35, 80, 0.25)' : 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Zone:
+                    </span>
+                    {allZones.map(z => (
+                      <button
+                        key={z}
+                        type="button"
+                        onClick={() => setZoneFilter(z)}
+                        style={{
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '5px 11px',
+                          fontSize: '12px',
+                          fontWeight: zoneFilter === z ? 600 : 500,
+                          cursor: 'pointer',
+                          background: zoneFilter === z ? '#0d9488' : '#f1f5f9',
+                          color: zoneFilter === z ? '#ffffff' : '#475569',
+                          boxShadow: zoneFilter === z ? '0 1px 3px rgba(13, 148, 136, 0.25)' : 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {z}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div>
+                    <span style={{
+                      fontSize: '12px',
+                      color: '#64748b',
+                      fontWeight: 600,
+                      background: '#f8fafc',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #e2e8f0'
+                    }}>
+                      Showing {filteredBays.length} of {yardLocations.length} Bays
+                    </span>
+                  </div>
+                </div>
+
+                {/* Spatial Bay Grid with Colored Background Cards */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                  gap: '16px'
+                }}>
+                  {filteredBays.map(loc => {
+                    const utilPct = Math.min(100, Math.round(((loc.currentStock || 0) / (loc.capacityTonnes || 500)) * 100));
+                    const isHigh = utilPct > 85;
+                    const isMedium = utilPct >= 60 && utilPct <= 85;
+                    const itemsInBay = getItemsInBay(loc);
+
+                    const cardBg = isHigh
+                      ? 'linear-gradient(180deg, #fff1f2 0%, #ffffff 80px)'
+                      : isMedium
+                        ? 'linear-gradient(180deg, #fffbeb 0%, #ffffff 80px)'
+                        : 'linear-gradient(180deg, #f0fdf4 0%, #ffffff 80px)';
+
+                    const borderColor = isHigh ? '#fecdd3' : isMedium ? '#fde68a' : '#bbf7d0';
+                    const topBorderColor = isHigh ? '#e11d48' : isMedium ? '#d97706' : '#059669';
+
+                    return (
+                      <div
+                        key={loc.id}
+                        style={{
+                          background: cardBg,
+                          border: `1px solid ${borderColor}`,
+                          borderTop: `4px solid ${topBorderColor}`,
+                          borderRadius: '12px',
+                          padding: '18px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          gap: '14px',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)',
+                          transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+                        }}
+                        onClick={() => setInspectingBay({ ...loc, items: itemsInBay })}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.03)';
+                        }}
+                      >
+                        <div>
+                          {/* Card Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <MapPin size={15} style={{ color: topBorderColor }} />
+                                <strong style={{ color: '#0f172a', fontSize: '15.5px' }}>{loc.zone} • {loc.bay}</strong>
+                              </div>
+                              <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span className="badge badge-soft" style={{ fontSize: '10.5px', padding: '1px 6px' }}>{loc.type}</span>
+                                <span>•</span>
+                                <span>{itemsInBay.length} active {itemsInBay.length === 1 ? 'item' : 'items'}</span>
+                              </div>
+                            </div>
+                            <span className={`badge ${isHigh ? 'badge-ruby' : isMedium ? 'badge-amber' : 'badge-emerald'}`} style={{ fontWeight: 700, padding: '3px 8px' }}>
+                              ● {utilPct}% Full
+                            </span>
+                          </div>
+
+                          {/* Utilization Gauge */}
+                          <div style={{ height: '7px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', margin: '12px 0 6px 0' }}>
+                            <div style={{
+                              width: `${utilPct}%`,
+                              height: '100%',
+                              background: topBorderColor,
+                              borderRadius: '4px',
+                              transition: 'width 0.4s ease'
+                            }} />
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#64748b' }}>
+                            <span>Load: <strong style={{ color: '#0f172a' }}>{loc.currentStock} MT</strong></span>
+                            <span>Limit: <strong>{loc.capacityTonnes} MT</strong></span>
+                            <span style={{ color: isHigh ? '#e11d48' : '#059669', fontWeight: 600 }}>
+                              {Math.max(0, loc.capacityTonnes - loc.currentStock)} MT Free
+                            </span>
+                          </div>
+
+                          {/* Stored Items Preview Box with Soft Background */}
+                          <div style={{
+                            marginTop: '12px',
+                            padding: '10px 12px',
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px'
+                          }}>
+                            <div style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b', fontWeight: 700, marginBottom: '6px' }}>
+                              Stored Inventory ({itemsInBay.length})
+                            </div>
+                            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              {itemsInBay.slice(0, 3).map((item, idx) => (
+                                <span key={idx} style={{
+                                  fontSize: '11px',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontWeight: 600,
+                                  background: '#ffffff',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '4px',
+                                  padding: '2px 7px',
+                                  color: '#0f172a',
+                                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                }}>
+                                  {item.name}
+                                </span>
+                              ))}
+                              {itemsInBay.length > 3 && (
+                                <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 600 }}>
+                                  +{itemsInBay.length - 3} more
+                                </span>
+                              )}
+                              {itemsInBay.length === 0 && (
+                                <span style={{ fontSize: '11.5px', color: '#94a3b8', fontStyle: 'italic' }}>
+                                  Bay available • No items loaded
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card Footer Bar */}
+                        <div style={{
+                          paddingTop: '10px',
+                          borderTop: '1px solid #f1f5f9',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                            📍 {loc.yard || 'Carrara Yard Main'}
+                          </span>
+
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              color: '#0d9488',
+                              fontWeight: 600,
+                              background: '#f0fdfa',
+                              border: '1px solid #ccfbf1',
+                              padding: '3px 8px',
+                              borderRadius: '5px'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInspectingBay({ ...loc, items: itemsInBay });
+                            }}
+                          >
+                            <Eye size={13} />
+                            <span>Inspect Details</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Bay Detail Inspection Drawer / Modal */}
+                {inspectingBay && (
+                  <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+                    <div className="modal-card" style={{ maxWidth: '780px', width: '92%', borderRadius: '12px', overflow: 'hidden' }}>
+                      <div className="modal-header" style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderBottom: '1px solid var(--line)',
+                        padding: '16px 20px',
+                        background: 'var(--surface)'
+                      }}>
+                        <div>
+                          <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', fontWeight: 600 }}>
+                            Bay Contents & Provenance Inspector
+                          </div>
+                          <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 700, color: 'var(--ink)' }}>
+                            {inspectingBay.zone} • {inspectingBay.bay} ({inspectingBay.type})
+                          </h3>
+                        </div>
+                        <button className="btn-icon" onClick={() => setInspectingBay(null)}>
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div className="modal-body" style={{ padding: '20px' }}>
+                        {/* Bay Occupancy Summary Banner */}
+                        <div style={{
+                          padding: '12px 16px',
+                          background: 'var(--surface-sunken)',
+                          borderRadius: '8px',
+                          border: '1px solid var(--line)',
+                          marginBottom: '16px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '12px'
+                        }}>
+                          <div>
+                            <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Facility Location:</div>
+                            <strong style={{ fontSize: '13px', color: 'var(--ink)' }}>{inspectingBay.yard || 'Carrara Yard Main'}</strong>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Current / Max Capacity:</div>
+                            <strong style={{ fontSize: '13px', color: 'var(--ink)' }}>{inspectingBay.currentStock} MT / {inspectingBay.capacityTonnes} MT</strong>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Status:</div>
+                            <span className="badge badge-emerald">Operational Bay</span>
+                          </div>
+                          <div>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => {
+                                setInspectingBay(null);
+                                openAddDrawer('putaway');
+                              }}
+                            >
+                              <Plus size={14} />
+                              <span>Putaway to this Bay</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Inventory Items in Bay */}
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '10px' }}>
+                          Physical Items Stored in {inspectingBay.bay} ({inspectingBay.items?.length || 0}):
+                        </div>
+
+                        {(!inspectingBay.items || inspectingBay.items.length === 0) ? (
+                          <div style={{
+                            padding: '30px',
+                            textAlign: 'center',
+                            background: 'var(--surface-sunken)',
+                            borderRadius: '8px',
+                            color: 'var(--muted)',
+                            fontSize: '13px'
+                          }}>
+                            No active stone blocks, slabs, or crates are currently mapped to this bay.
+                          </div>
+                        ) : (
+                          <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: '8px' }}>
+                            <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                              <thead>
+                                <tr style={{ background: 'var(--surface-sunken)', borderBottom: '1px solid var(--line)', textAlign: 'left' }}>
+                                  <th style={{ padding: '10px 12px' }}>Item ID</th>
+                                  <th style={{ padding: '10px 12px' }}>Category</th>
+                                  <th style={{ padding: '10px 12px' }}>Stone Type</th>
+                                  <th style={{ padding: '10px 12px' }}>Dimensions / Weight</th>
+                                  <th style={{ padding: '10px 12px' }}>Grade</th>
+                                  <th style={{ padding: '10px 12px' }}>Status</th>
+                                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {inspectingBay.items.map((item, idx) => (
+                                  <tr key={idx} style={{ borderBottom: '1px solid var(--line)' }}>
+                                    <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                                      {item.name}
+                                    </td>
+                                    <td style={{ padding: '10px 12px' }}>
+                                      <span className="badge badge-soft">{item.category}</span>
+                                    </td>
+                                    <td style={{ padding: '10px 12px', fontWeight: 500 }}>
+                                      {item.stoneType}
+                                    </td>
+                                    <td style={{ padding: '10px 12px' }}>
+                                      {item.dimensions} ({item.weightOrSqFt})
+                                    </td>
+                                    <td style={{ padding: '10px 12px' }}>
+                                      <span className="badge badge-emerald">{item.grade}</span>
+                                    </td>
+                                    <td style={{ padding: '10px 12px' }}>
+                                      <StatusBadge status={item.status} />
+                                    </td>
+                                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                                      <ActionDropdown
+                                        items={[
+                                          {
+                                            label: 'Print Barcode / QR Label',
+                                            icon: Printer,
+                                            confirm: `Print physical barcode tag for ${item.name}?`,
+                                            onClick: () => {
+                                              openPrintLabel(item.rawItem, item.stage);
+                                            }
+                                          },
+                                          {
+                                            label: 'Relocate / Move Item',
+                                            icon: Move,
+                                            confirm: `Initiate location transfer for ${item.name}?`,
+                                            onClick: () => {
+                                              setInspectingBay(null);
+                                              openAddDrawer('putaway');
+                                            }
+                                          }
+                                        ]}
+                                      />
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="modal-footer" style={{
+                        borderTop: '1px solid var(--line)',
+                        padding: '12px 20px',
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        background: 'var(--surface-sunken)'
+                      }}>
+                        <button className="btn btn-secondary" onClick={() => setInspectingBay(null)}>Close</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {activeTab === 'boxes' && (
             <DataTable
@@ -1638,59 +2570,499 @@ export function SupplierInventoryHub() {
           )}
 
           {(activeTab === 'move' || activeTab === 'transfer') && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>
-                  {activeTab === 'move' ? 'Internal Move Movements' : 'Inter-Yard Stock Transfers'}
-                </div>
-                <button className="btn btn-secondary btn-sm" onClick={() => openAddDrawer('putaway')}>
-                  <Move size={14} />
-                  <span>Log Movement</span>
-                </button>
-              </div>
-              <DataTable
-                columns={[
-                  { header: 'ID', accessor: 'id' },
-                  { header: 'Item Type', accessor: 'itemType' },
-                  { header: 'Item ID', render: r => <strong>{r.itemId}</strong> },
-                  { header: 'From Location', accessor: 'fromLoc' },
-                  { header: 'To Location', render: r => <strong style={{ color: 'var(--emerald-text)' }}>{r.toLoc}</strong> },
-                  { header: 'Date', accessor: 'date' },
-                  { header: 'Operator', accessor: 'person' },
-                  { header: 'Reason', accessor: 'reason' }
-                ]}
-                data={storageMovements}
-                emptyMessage="No movement records logged."
-              />
-            </div>
+            <DataTable
+              columns={[
+                { header: 'ID', accessor: 'id' },
+                { header: 'Item Type', accessor: 'itemType' },
+                { header: 'Item ID', render: r => <strong>{r.itemId}</strong> },
+                { header: 'From Location', accessor: 'fromLoc' },
+                { header: 'To Location', render: r => <strong style={{ color: 'var(--emerald-text)' }}>{r.toLoc}</strong> },
+                { header: 'Date', accessor: 'date' },
+                { header: 'Operator', accessor: 'person' },
+                { header: 'Reason', accessor: 'reason' }
+              ]}
+              data={storageMovements}
+              emptyMessage="No movement records logged."
+            />
           )}
 
-          {activeTab === 'gen_label' && (
-            <div className="card" style={{ padding: '24px', maxWidth: '600px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 12px 0' }}>Generate New Item Label</h3>
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label">Item / Record to Label</label>
-                <select
-                  className="form-select"
-                  onChange={e => {
-                    const found = unifiedStockRows.find(r => r.id === e.target.value);
-                    if (found) openPrintLabel(found.rawItem, found.stage);
-                  }}
-                  defaultValue=""
-                >
-                  <option value="">Select Item...</option>
-                  {unifiedStockRows.map(r => (
-                    <option key={r.id} value={r.id}>
-                      {r.id} ({r.stage} - {r.stoneType})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                Selecting an item will immediately compile its dimensions, grade, finish, and quarry traceability into a printable barcode / QR label.
-              </p>
-            </div>
-          )}
+          {activeTab === 'gen_label' && (() => {
+            const categoryFilteredItems = unifiedStockRows.filter(r => {
+              if (labelCategoryFilter === 'All') return true;
+              if (labelCategoryFilter === 'Blocks') return r.stage === 'Block';
+              if (labelCategoryFilter === 'Slabs') return r.stage === 'Slab';
+              if (labelCategoryFilter === 'Pieces') return r.stage === 'Piece';
+              if (labelCategoryFilter === 'Boxes') return r.stage === 'Box';
+              return true;
+            });
+
+            const activeItem = unifiedStockRows.find(r => r.id === selectedLabelItemId) || categoryFilteredItems[0] || unifiedStockRows[0];
+            const currentTemplate = labelTemplatesMaster.find(t => t.id === selectedLabelTemplateId) || labelTemplatesMaster[0];
+
+            const handleQueueLabel = () => {
+              if (!activeItem) return;
+              const newLabelNo = `LBL-${String(labels.length + 1).padStart(4, '0')}`;
+              const newLabel = {
+                id: newLabelNo,
+                labelNo: newLabelNo,
+                labelType: activeItem.stage,
+                linkedRecordId: activeItem.id,
+                template: currentTemplate?.name || 'Standard QR Label',
+                qrCode: `QR-${activeItem.id}-${Date.now().toString().slice(-4)}`,
+                barcode: `8901${Math.floor(10000000 + Math.random() * 90000000)}`,
+                stoneType: activeItem.stoneType,
+                size: activeItem.size || 'Custom',
+                thickness: activeItem.thickness || '20mm',
+                grade: activeItem.grade || 'Grade A',
+                finish: activeItem.finish || 'Polished High Gloss',
+                sqft: activeItem.sqft || 50,
+                location: activeItem.location || 'Carrara Yard Main',
+                date: new Date().toISOString().split('T')[0],
+                supplier: 'Monte Altissimo Quarry',
+                printCount: Number(labelPrintQty) || 1,
+                printedBy: currentUser?.name || 'Ramesh Patel',
+                status: 'Active',
+                isArchived: false
+              };
+              addLabel(newLabel);
+              showToast(`Label ${newLabelNo} generated and queued for printing!`);
+              setIsLabelStudioOpen(false);
+            };
+
+            return (
+              <>
+                <DataTable
+                  columns={labelColumns}
+                  data={labels}
+                  emptyMessage="No product tags generated yet."
+                />
+
+                {/* Right-Side Slide-Over Drawer for Product Tag & Barcode Studio */}
+                {isLabelStudioOpen && (
+                  <div className="drawer-backdrop" onClick={() => setIsLabelStudioOpen(false)}>
+                    <div
+                      className="drawer"
+                      style={{ width: '840px', maxWidth: '95vw' }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {/* Drawer Header */}
+                      <div className="drawer-header" style={{ padding: '16px 20px', background: 'var(--white)' }}>
+                        <div>
+                          <div className="drawer-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--ink)' }}>
+                            Product Tag & Barcode Studio
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
+                            Design, preview and queue heavy-duty GS1-128 barcodes and dynamic QR tags with quarry-to-crate provenance
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="iconbtn"
+                          onClick={() => setIsLabelStudioOpen(false)}
+                          title="Close"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      {/* Drawer Body */}
+                      <div
+                        style={{
+                          flex: 1,
+                          overflowY: 'auto',
+                          padding: '20px',
+                          background: '#f8fafc',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '16px'
+                        }}
+                      >
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
+                          {/* Left Column: Label Configuration Form */}
+                          <div
+                            className="card"
+                            style={{
+                              padding: '20px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '16px',
+                              background: '#ffffff',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid var(--line)',
+                              borderRadius: '12px',
+                              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)'
+                            }}
+                          >
+                            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)', borderBottom: '1px solid var(--line)', paddingBottom: '10px' }}>
+                              1. Select Item & Template Parameters
+                            </div>
+
+                            {/* Category Filter Pills */}
+                            <div>
+                              <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600 }}>
+                                Filter Items by Category:
+                              </label>
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                {['All', 'Blocks', 'Slabs', 'Pieces', 'Boxes'].map(cat => (
+                                  <button
+                                    key={cat}
+                                    type="button"
+                                    onClick={() => setLabelCategoryFilter(cat)}
+                                    style={{
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      padding: '5px 12px',
+                                      fontSize: '12px',
+                                      fontWeight: labelCategoryFilter === cat ? 600 : 500,
+                                      cursor: 'pointer',
+                                      background: labelCategoryFilter === cat ? '#222350' : 'var(--surface-sunken)',
+                                      color: labelCategoryFilter === cat ? '#fff' : 'var(--ink)'
+                                    }}
+                                  >
+                                    {cat}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Item Picker */}
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontWeight: 600, fontSize: '12px' }}>
+                                Item / Record to Tag:
+                              </label>
+                              <select
+                                className="form-select"
+                                value={activeItem?.id || ''}
+                                onChange={e => setSelectedLabelItemId(e.target.value)}
+                              >
+                                {categoryFilteredItems.map(r => (
+                                  <option key={r.id} value={r.id}>
+                                    {r.id} • {r.stage} ({r.stoneType} - {r.size})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Selected Item Quick Specs */}
+                            {activeItem && (
+                              <div style={{
+                                padding: '12px 14px',
+                                background: 'var(--surface-sunken)',
+                                borderRadius: '8px',
+                                border: '1px solid var(--line)',
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(2, 1fr)',
+                                gap: '8px',
+                                fontSize: '11px'
+                              }}>
+                                <div><span style={{ color: 'var(--muted)' }}>Stone Material:</span> <strong style={{ color: 'var(--ink)' }}>{activeItem.stoneType}</strong></div>
+                                <div><span style={{ color: 'var(--muted)' }}>Dimensions:</span> <strong style={{ color: 'var(--ink)' }}>{activeItem.size}</strong></div>
+                                <div><span style={{ color: 'var(--muted)' }}>Thickness/Weight:</span> <strong style={{ color: 'var(--ink)' }}>{activeItem.thickness}</strong></div>
+                                <div><span style={{ color: 'var(--muted)' }}>Quality Grade:</span> <span className="badge badge-emerald">{activeItem.grade}</span></div>
+                                <div style={{ gridColumn: 'span 2' }}>
+                                  <span style={{ color: 'var(--muted)' }}>Location:</span> <strong style={{ color: 'var(--teal-600)' }}>{activeItem.location || 'Carrara Yard Main'}</strong>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Template Selector */}
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontWeight: 600, fontSize: '12px' }}>
+                                Label Format & Template:
+                              </label>
+                              <select
+                                className="form-select"
+                                value={selectedLabelTemplateId}
+                                onChange={e => setSelectedLabelTemplateId(e.target.value)}
+                              >
+                                {labelTemplatesMaster.map(t => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name} ({t.dimensions} • {t.codeType})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Print Quantity & Options */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '14px', alignItems: 'center' }}>
+                              <div className="form-group">
+                                <label className="form-label" style={{ fontWeight: 600, fontSize: '12px' }}>Quantity:</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="100"
+                                  className="form-input"
+                                  value={labelPrintQty}
+                                  onChange={e => setLabelPrintQty(Math.max(1, parseInt(e.target.value) || 1))}
+                                />
+                              </div>
+
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '10px' }}>
+                                <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={labelOptions.showQR}
+                                    onChange={e => setLabelOptions(prev => ({ ...prev, showQR: e.target.checked }))}
+                                  />
+                                  <span>Include Dynamic QR Traceability</span>
+                                </label>
+                                <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={labelOptions.showBarcode}
+                                    onChange={e => setLabelOptions(prev => ({ ...prev, showBarcode: e.target.checked }))}
+                                  />
+                                  <span>Include Code-128 / GS1 Barcode</span>
+                                </label>
+                                <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={labelOptions.showQuarry}
+                                    onChange={e => setLabelOptions(prev => ({ ...prev, showQuarry: e.target.checked }))}
+                                  />
+                                  <span>Include Quarry Traceability Certificate</span>
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right Column: Live High-Definition Tag Preview */}
+                          <div
+                            className="card"
+                            style={{
+                              padding: '20px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '14px',
+                              alignItems: 'center',
+                              background: '#ffffff',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid var(--line)',
+                              borderRadius: '12px',
+                              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)'
+                            }}
+                          >
+                            <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--line)', paddingBottom: '10px' }}>
+                              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)' }}>
+                                2. Live Industrial Tag Simulation
+                              </span>
+                              <span className="badge badge-soft" style={{ fontSize: '11px' }}>
+                                {currentTemplate?.dimensions || '4" x 6"'} • Thermal Synthetic Tag
+                              </span>
+                            </div>
+
+                            {/* Realistic Industrial Thermal Tag Card */}
+                            <div style={{
+                              width: '320px',
+                              background: '#ffffff',
+                              color: '#0f172a',
+                              borderRadius: '8px',
+                              border: '2px solid #334155',
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                              padding: '16px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '10px',
+                              position: 'relative'
+                            }}>
+                              {/* Tag Punched Hole */}
+                              <div style={{
+                                position: 'absolute',
+                                top: '10px',
+                                right: '12px',
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '50%',
+                                border: '2px solid #94a3b8',
+                                background: '#f1f5f9'
+                              }} />
+
+                              {/* Header */}
+                              <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '6px' }}>
+                                <div style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.1em', color: '#1e3a8a' }}>
+                                  VENGO GRANITES CORP • CARRARA FACILITY
+                                </div>
+                                <div style={{ fontSize: '15px', fontWeight: 900, textTransform: 'uppercase', color: '#0f172a', marginTop: '2px' }}>
+                                  {activeItem?.stoneType || 'NATURAL STONE'}
+                                </div>
+                              </div>
+
+                              {/* Barcode & QR Code Section */}
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '10px',
+                                padding: '6px 0',
+                                borderBottom: '1px dashed #cbd5e1'
+                              }}>
+                                {labelOptions.showQR && (
+                                  <div style={{ border: '1px solid #0f172a', padding: '3px', borderRadius: '4px', background: '#fff' }}>
+                                    <svg width="76" height="76" viewBox="0 0 84 84">
+                                      <rect width="84" height="84" fill="#ffffff" />
+                                      <rect x="6" y="6" width="24" height="24" fill="#0f172a" />
+                                      <rect x="10" y="10" width="16" height="16" fill="#ffffff" />
+                                      <rect x="14" y="14" width="8" height="8" fill="#0f172a" />
+                                      <rect x="54" y="6" width="24" height="24" fill="#0f172a" />
+                                      <rect x="58" y="10" width="16" height="16" fill="#ffffff" />
+                                      <rect x="62" y="14" width="8" height="8" fill="#0f172a" />
+                                      <rect x="6" y="54" width="24" height="24" fill="#0f172a" />
+                                      <rect x="10" y="58" width="16" height="16" fill="#ffffff" />
+                                      <rect x="14" y="62" width="8" height="8" fill="#0f172a" />
+                                      <rect x="34" y="8" width="4" height="8" fill="#0f172a" />
+                                      <rect x="42" y="12" width="6" height="4" fill="#0f172a" />
+                                      <rect x="36" y="22" width="4" height="4" fill="#0f172a" />
+                                      <rect x="32" y="32" width="8" height="8" fill="#0f172a" />
+                                      <rect x="44" y="34" width="6" height="4" fill="#0f172a" />
+                                      <rect x="54" y="36" width="8" height="4" fill="#0f172a" />
+                                      <rect x="68" y="34" width="6" height="6" fill="#0f172a" />
+                                      <rect x="34" y="44" width="4" height="8" fill="#0f172a" />
+                                      <rect x="42" y="48" width="8" height="4" fill="#0f172a" />
+                                      <rect x="54" y="44" width="4" height="6" fill="#0f172a" />
+                                      <rect x="64" y="46" width="6" height="4" fill="#0f172a" />
+                                      <rect x="74" y="42" width="4" height="6" fill="#0f172a" />
+                                      <rect x="36" y="58" width="4" height="6" fill="#0f172a" />
+                                      <rect x="44" y="56" width="6" height="4" fill="#0f172a" />
+                                      <rect x="56" y="60" width="6" height="6" fill="#0f172a" />
+                                      <rect x="66" y="58" width="4" height="8" fill="#0f172a" />
+                                      <rect x="74" y="64" width="4" height="6" fill="#0f172a" />
+                                    </svg>
+                                  </div>
+                                )}
+
+                                <div style={{ flex: 1, textAlign: 'center' }}>
+                                  {labelOptions.showBarcode && (
+                                    <svg width="190" height="44" viewBox="0 0 190 44">
+                                      <rect x="4" y="2" width="2" height="30" fill="#0f172a" />
+                                      <rect x="8" y="2" width="4" height="30" fill="#0f172a" />
+                                      <rect x="14" y="2" width="1.5" height="30" fill="#0f172a" />
+                                      <rect x="18" y="2" width="3" height="30" fill="#0f172a" />
+                                      <rect x="24" y="2" width="1.5" height="30" fill="#0f172a" />
+                                      <rect x="28" y="2" width="4" height="30" fill="#0f172a" />
+                                      <rect x="34" y="2" width="2" height="30" fill="#0f172a" />
+                                      <rect x="38" y="2" width="1.5" height="30" fill="#0f172a" />
+                                      <rect x="42" y="2" width="4.5" height="30" fill="#0f172a" />
+                                      <rect x="48" y="2" width="2" height="30" fill="#0f172a" />
+                                      <rect x="53" y="2" width="3" height="30" fill="#0f172a" />
+                                      <rect x="58" y="2" width="1.5" height="30" fill="#0f172a" />
+                                      <rect x="63" y="2" width="4" height="30" fill="#0f172a" />
+                                      <rect x="70" y="2" width="2" height="30" fill="#0f172a" />
+                                      <rect x="75" y="2" width="3" height="30" fill="#0f172a" />
+                                      <rect x="80" y="2" width="4.5" height="30" fill="#0f172a" />
+                                      <rect x="87" y="2" width="2" height="30" fill="#0f172a" />
+                                      <rect x="92" y="2" width="3" height="30" fill="#0f172a" />
+                                      <rect x="98" y="2" width="1.5" height="30" fill="#0f172a" />
+                                      <rect x="103" y="2" width="4" height="30" fill="#0f172a" />
+                                      <rect x="110" y="2" width="2" height="30" fill="#0f172a" />
+                                      <rect x="115" y="2" width="3" height="30" fill="#0f172a" />
+                                      <rect x="121" y="2" width="1.5" height="30" fill="#0f172a" />
+                                      <rect x="126" y="2" width="4" height="30" fill="#0f172a" />
+                                      <rect x="132" y="2" width="2.5" height="30" fill="#0f172a" />
+                                      <rect x="137" y="2" width="1.5" height="30" fill="#0f172a" />
+                                      <rect x="142" y="2" width="4" height="30" fill="#0f172a" />
+                                      <rect x="148" y="2" width="2" height="30" fill="#0f172a" />
+                                      <rect x="153" y="2" width="3" height="30" fill="#0f172a" />
+                                      <rect x="159" y="2" width="1.5" height="30" fill="#0f172a" />
+                                      <rect x="164" y="2" width="4" height="30" fill="#0f172a" />
+                                      <rect x="171" y="2" width="2" height="30" fill="#0f172a" />
+                                      <rect x="176" y="2" width="3" height="30" fill="#0f172a" />
+                                      <rect x="182" y="2" width="4" height="30" fill="#0f172a" />
+                                      <text x="95" y="42" textAnchor="middle" fontSize="9" fontFamily="var(--font-mono)" letterSpacing="2" fill="#0f172a">
+                                        8901000{activeItem?.id?.replace(/[^0-9]/g, '') || '1029'}
+                                      </text>
+                                    </svg>
+                                  )}
+                                  <div style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 800, marginTop: '2px' }}>
+                                    {activeItem?.id}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Tag Property Grid */}
+                              <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(2, 1fr)',
+                                gap: '6px',
+                                fontSize: '11px',
+                                lineHeight: '1.3'
+                              }}>
+                                <div><strong style={{ color: '#64748b' }}>TYPE:</strong> <span style={{ fontWeight: 700 }}>{activeItem?.stage?.toUpperCase()}</span></div>
+                                <div><strong style={{ color: '#64748b' }}>GRADE:</strong> <span style={{ fontWeight: 700, color: '#047857' }}>{activeItem?.grade || 'GRADE A'}</span></div>
+                                <div><strong style={{ color: '#64748b' }}>DIMENSIONS:</strong> <span style={{ fontWeight: 700 }}>{activeItem?.size}</span></div>
+                                <div><strong style={{ color: '#64748b' }}>THICKNESS:</strong> <span style={{ fontWeight: 700 }}>{activeItem?.thickness}</span></div>
+                                <div style={{ gridColumn: 'span 2' }}>
+                                  <strong style={{ color: '#64748b' }}>YARD LOCATION:</strong> <span style={{ fontWeight: 700 }}>{activeItem?.location || 'CARRARA YARD MAIN'}</span>
+                                </div>
+                              </div>
+
+                              {/* Tag Footer Guarantee */}
+                              {labelOptions.showQuarry && (
+                                <div style={{
+                                  borderTop: '1px solid #0f172a',
+                                  paddingTop: '6px',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  fontSize: '9px',
+                                  fontWeight: 700,
+                                  color: '#475569'
+                                }}>
+                                  <span>ORIGIN: MONTE ALTISSIMO QUARRY</span>
+                                  <span style={{ color: '#047857' }}>✓ QC CERTIFIED</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Drawer Footer */}
+                      <div
+                        className="drawer-footer"
+                        style={{
+                          padding: '14px 20px',
+                          borderTop: '1px solid var(--line)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          background: 'var(--soft)'
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setIsLabelStudioOpen(false)}
+                        >
+                          Cancel
+                        </button>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => {
+                              const target = activeItem?.rawItem;
+                              if (target) openPrintLabel(target, activeItem.stage);
+                            }}
+                          >
+                            <Printer size={14} />
+                            <span>Print Directly</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={handleQueueLabel}
+                          >
+                            <Plus size={14} />
+                            <span>Add to Printed Registry</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {(activeTab === 'print' || activeTab === 'reprint') && (
             <DataTable
@@ -1725,7 +3097,7 @@ export function SupplierInventoryHub() {
 
           {activeTab === 'stock_slabs' && (
             <DataTable
-              columns={stockGridColumns.filter(c => c.header !== 'Stage')}
+              columns={lotsColumns}
               data={slabs.map(s => ({
                 id: s.id,
                 stoneType: s.stoneType,
@@ -1875,16 +3247,15 @@ export function SupplierInventoryHub() {
       >
         {/* Gate Entry Form */}
         {drawerType === 'gate' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
-              <label className="form-label">Truck Registration Number *</label>
+              <label className="form-label">Truck Registration Number</label>
               <input
                 type="text"
                 className="form-input"
                 placeholder="e.g. RJ-14-GA-9012"
                 value={formData.truckNo || ''}
                 onChange={e => setFormData({ ...formData, truckNo: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
@@ -1892,7 +3263,7 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
-                placeholder="Driver Name"
+                placeholder="e.g. Ramesh Kumar"
                 value={formData.driverName || ''}
                 onChange={e => setFormData({ ...formData, driverName: e.target.value })}
               />
@@ -1902,7 +3273,7 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
-                placeholder="+91-..."
+                placeholder="e.g. +91 98765 43210"
                 value={formData.driverPhone || ''}
                 onChange={e => setFormData({ ...formData, driverPhone: e.target.value })}
               />
@@ -1912,19 +3283,19 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
-                placeholder="e.g. Marwar Logistics"
+                placeholder="e.g. Marwar Logistics Pvt Ltd"
                 value={formData.transporter || ''}
                 onChange={e => setFormData({ ...formData, transporter: e.target.value })}
               />
             </div>
             <div className="form-group col-span-2">
-              <label className="form-label">Supplier / Quarry *</label>
+              <label className="form-label">Supplier / Quarry</label>
               <select
                 className="form-select"
                 value={formData.supplier || ''}
                 onChange={e => setFormData({ ...formData, supplier: e.target.value })}
-                required
               >
+                <option value="">Select Quarry / Supplier (Optional)</option>
                 {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
             </div>
@@ -1933,7 +3304,7 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
-                placeholder="CH-XXXX"
+                placeholder="e.g. CH-2026-9041"
                 value={formData.challanNo || ''}
                 onChange={e => setFormData({ ...formData, challanNo: e.target.value })}
               />
@@ -1944,7 +3315,7 @@ export function SupplierInventoryHub() {
                 type="number"
                 step="0.01"
                 className="form-input"
-                placeholder="28.5"
+                placeholder="e.g. 28.50"
                 value={formData.challanWeight || ''}
                 onChange={e => setFormData({ ...formData, challanWeight: e.target.value })}
               />
@@ -1954,49 +3325,50 @@ export function SupplierInventoryHub() {
               <textarea
                 className="form-textarea"
                 rows={2}
+                placeholder="Enter remarks or arrival notes..."
                 value={formData.remarks || ''}
                 onChange={e => setFormData({ ...formData, remarks: e.target.value })}
               />
             </div>
-          </div>
+          </>
         )}
 
         {/* Weighbridge Form */}
         {drawerType === 'weighbridge' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
-              <label className="form-label">Gate Entry *</label>
+              <label className="form-label">Gate Entry</label>
               <select
                 className="form-select"
                 value={formData.gateEntryId || ''}
                 onChange={e => setFormData({ ...formData, gateEntryId: e.target.value })}
-                required
               >
+                <option value="">Select Associated Gate Entry (Optional)</option>
                 {gateEntries.map(g => (
                   <option key={g.id} value={g.id}>{g.entryNo} - {g.truckNo} ({g.supplier})</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Gross Weight (Tons) *</label>
+              <label className="form-label">Gross Weight (Tons)</label>
               <input
                 type="number"
                 step="0.01"
                 className="form-input"
+                placeholder="e.g. 42.50"
                 value={formData.grossWeight || ''}
                 onChange={e => setFormData({ ...formData, grossWeight: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Tare Weight (Tons) *</label>
+              <label className="form-label">Tare Weight (Tons)</label>
               <input
                 type="number"
                 step="0.01"
                 className="form-input"
+                placeholder="e.g. 14.00"
                 value={formData.tareWeight || ''}
                 onChange={e => setFormData({ ...formData, tareWeight: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
@@ -2005,6 +3377,7 @@ export function SupplierInventoryHub() {
                 type="number"
                 step="0.01"
                 className="form-input"
+                placeholder="e.g. 28.50"
                 value={formData.challanWeight || ''}
                 onChange={e => setFormData({ ...formData, challanWeight: e.target.value })}
               />
@@ -2017,31 +3390,31 @@ export function SupplierInventoryHub() {
                 value={`${Number(((formData.grossWeight || 0) - (formData.tareWeight || 0)).toFixed(2))} Tons`}
               />
             </div>
-          </div>
+          </>
         )}
 
         {/* Raw Block Form */}
         {drawerType === 'block' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
-              <label className="form-label">Quarry Source / Supplier *</label>
+              <label className="form-label">Quarry Source / Supplier</label>
               <select
                 className="form-select"
                 value={formData.supplier || ''}
                 onChange={e => setFormData({ ...formData, supplier: e.target.value })}
-                required
               >
+                <option value="">Select Quarry Source (Optional)</option>
                 {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Stone Type *</label>
+              <label className="form-label">Stone Type</label>
               <select
                 className="form-select"
                 value={formData.stoneType || ''}
                 onChange={e => setFormData({ ...formData, stoneType: e.target.value })}
-                required
               >
+                <option value="">Select Stone Type (Optional)</option>
                 {stoneTypes.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
               </select>
             </div>
@@ -2050,6 +3423,7 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Q-BLK-8821"
                 value={formData.quarryBlockNo || ''}
                 onChange={e => setFormData({ ...formData, quarryBlockNo: e.target.value })}
               />
@@ -2059,6 +3433,7 @@ export function SupplierInventoryHub() {
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 120"
                 value={formData.length || ''}
                 onChange={e => setFormData({ ...formData, length: e.target.value })}
               />
@@ -2068,6 +3443,7 @@ export function SupplierInventoryHub() {
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 72"
                 value={formData.width || ''}
                 onChange={e => setFormData({ ...formData, width: e.target.value })}
               />
@@ -2077,6 +3453,7 @@ export function SupplierInventoryHub() {
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 68"
                 value={formData.height || ''}
                 onChange={e => setFormData({ ...formData, height: e.target.value })}
               />
@@ -2087,6 +3464,7 @@ export function SupplierInventoryHub() {
                 type="number"
                 step="0.01"
                 className="form-input"
+                placeholder="e.g. 28.50"
                 value={formData.netWeight || ''}
                 onChange={e => setFormData({ ...formData, netWeight: e.target.value })}
               />
@@ -2096,6 +3474,7 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Carrara Yard Main"
                 value={formData.receivingYard || ''}
                 onChange={e => setFormData({ ...formData, receivingYard: e.target.value })}
               />
@@ -2105,31 +3484,40 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Zone A / Bay 02"
                 value={formData.location || ''}
                 onChange={e => setFormData({ ...formData, location: e.target.value })}
               />
             </div>
-          </div>
+          </>
         )}
 
         {/* QC 1 Form */}
         {drawerType === 'qc1' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
-              <label className="form-label">Block to Inspect *</label>
+              <label className="form-label">Block to Inspect</label>
               <select
                 className="form-select"
                 value={formData.blockId || ''}
-                onChange={e => setFormData({ ...formData, blockId: e.target.value })}
-                required
+                onChange={e => {
+                  const b = detailedRawBlocks.find(item => item.id === e.target.value);
+                  setFormData({
+                    ...formData,
+                    blockId: e.target.value,
+                    grade: b?.grade || formData.grade || 'Grade A',
+                    sizeCheck: b ? `${b.length}" x ${b.width}" x ${b.height}" verified` : formData.sizeCheck
+                  });
+                }}
               >
+                <option value="">Select Block to Inspect</option>
                 {detailedRawBlocks.map(b => (
-                  <option key={b.id} value={b.id}>{b.blockNo} - {b.stoneType}</option>
+                  <option key={b.id} value={b.id}>{b.blockNo} - {b.stoneType} ({b.status})</option>
                 ))}
               </select>
             </div>
             <div className="form-group col-span-2">
-              <label className="form-label">Inspection Result *</label>
+              <label className="form-label">Inspection Result</label>
               <select
                 className="form-select"
                 value={formData.result || 'Pass'}
@@ -2151,33 +3539,60 @@ export function SupplierInventoryHub() {
                 <option value="Grade A">Grade A</option>
                 <option value="Grade B">Grade B</option>
                 <option value="Grade C">Grade C</option>
+                <option value="Commercial">Commercial</option>
               </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Inspector Name</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Inspector name"
+                value={formData.inspector || currentUser.name || ''}
+                onChange={e => setFormData({ ...formData, inspector: e.target.value })}
+              />
             </div>
             <div className="form-group">
               <label className="form-label">Cracks / Fissures</label>
               <input
                 type="text"
                 className="form-input"
-                placeholder="None"
+                placeholder="e.g. None or Minor hairline fissure"
                 value={formData.cracks || ''}
                 onChange={e => setFormData({ ...formData, cracks: e.target.value })}
               />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Defect Type</label>
+              <select
+                className="form-select"
+                value={formData.defectType || 'None'}
+                onChange={e => setFormData({ ...formData, defectType: e.target.value })}
+              >
+                <option value="None">None (Defect Free)</option>
+                <option value="Structural Crack">Structural Crack</option>
+                <option value="Hairline Fissure">Hairline Fissure</option>
+                <option value="Color Banding / Patch">Color Banding / Patch</option>
+                <option value="Quarry Stains">Quarry Stains</option>
+                <option value="Corner / Edge Breakage">Corner / Edge Breakage</option>
+              </select>
             </div>
             <div className="form-group col-span-2">
               <label className="form-label">Remarks</label>
               <textarea
                 className="form-textarea"
                 rows={2}
+                placeholder="Enter inspection remarks or notes..."
                 value={formData.remarks || ''}
                 onChange={e => setFormData({ ...formData, remarks: e.target.value })}
               />
             </div>
-          </div>
+          </>
         )}
 
         {/* Material Form */}
         {drawerType === 'material' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
               <label className="form-label">Target Block</label>
               <select
@@ -2185,18 +3600,18 @@ export function SupplierInventoryHub() {
                 value={formData.blockId || ''}
                 onChange={e => setFormData({ ...formData, blockId: e.target.value })}
               >
+                <option value="">Select Target Block (Optional)</option>
                 {detailedRawBlocks.map(b => (
                   <option key={b.id} value={b.id}>{b.blockNo} - {b.stoneType}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Material Type *</label>
+              <label className="form-label">Material Type</label>
               <select
                 className="form-select"
                 value={formData.materialType || 'Resin'}
                 onChange={e => setFormData({ ...formData, materialType: e.target.value })}
-                required
               >
                 <option value="Resin">Resin</option>
                 <option value="Mesh">Mesh</option>
@@ -2204,13 +3619,13 @@ export function SupplierInventoryHub() {
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Quantity Used *</label>
+              <label className="form-label">Quantity Used</label>
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 25"
                 value={formData.quantityUsed || ''}
                 onChange={e => setFormData({ ...formData, quantityUsed: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
@@ -2218,6 +3633,7 @@ export function SupplierInventoryHub() {
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 450"
                 value={formData.areaCovered || ''}
                 onChange={e => setFormData({ ...formData, areaCovered: e.target.value })}
               />
@@ -2227,47 +3643,48 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. 4 Hours"
                 value={formData.curingTime || ''}
                 onChange={e => setFormData({ ...formData, curingTime: e.target.value })}
               />
             </div>
-          </div>
+          </>
         )}
 
         {/* Slicing Form */}
         {drawerType === 'slicing' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
-              <label className="form-label">Block to Slice *</label>
+              <label className="form-label">Block to Slice</label>
               <select
                 className="form-select"
                 value={formData.blockId || ''}
                 onChange={e => setFormData({ ...formData, blockId: e.target.value })}
-                required
               >
+                <option value="">Select Block to Slice (Optional)</option>
                 {detailedRawBlocks.map(b => (
                   <option key={b.id} value={b.id}>{b.blockNo} - {b.stoneType}</option>
                 ))}
               </select>
             </div>
             <div className="form-group col-span-2">
-              <label className="form-label">Machine *</label>
+              <label className="form-label">Machine</label>
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Gangsaw 01 - Gaspari Menotti"
                 value={formData.machine || ''}
                 onChange={e => setFormData({ ...formData, machine: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Slab Count *</label>
+              <label className="form-label">Slab Count</label>
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 32"
                 value={formData.slabCount || ''}
                 onChange={e => setFormData({ ...formData, slabCount: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
@@ -2275,31 +3692,40 @@ export function SupplierInventoryHub() {
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 20"
                 value={formData.thickness || ''}
                 onChange={e => setFormData({ ...formData, thickness: e.target.value })}
               />
             </div>
-          </div>
+          </>
         )}
 
         {/* QC 2 Form */}
         {drawerType === 'qc2' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
-              <label className="form-label">Target Slab *</label>
+              <label className="form-label">Target Slab</label>
               <select
                 className="form-select"
                 value={formData.slabId || ''}
-                onChange={e => setFormData({ ...formData, slabId: e.target.value })}
-                required
+                onChange={e => {
+                  const s = slabs.find(item => item.id === e.target.value);
+                  setFormData({
+                    ...formData,
+                    slabId: e.target.value,
+                    lotId: s?.lotId || formData.lotId || '',
+                    grade: s?.grade || formData.grade || 'Grade A'
+                  });
+                }}
               >
+                <option value="">Select Target Slab</option>
                 {slabs.map(s => (
-                  <option key={s.id} value={s.id}>{s.slabNo} - {s.stoneType}</option>
+                  <option key={s.id} value={s.id}>{s.slabNo} - {s.stoneType} ({s.status})</option>
                 ))}
               </select>
             </div>
             <div className="form-group col-span-2">
-              <label className="form-label">Inspection Result *</label>
+              <label className="form-label">Inspection Result</label>
               <select
                 className="form-select"
                 value={formData.result || 'Pass'}
@@ -2312,10 +3738,34 @@ export function SupplierInventoryHub() {
               </select>
             </div>
             <div className="form-group">
+              <label className="form-label">Assigned Grade</label>
+              <select
+                className="form-select"
+                value={formData.grade || 'Grade A'}
+                onChange={e => setFormData({ ...formData, grade: e.target.value })}
+              >
+                <option value="Grade A">Grade A</option>
+                <option value="Grade B">Grade B</option>
+                <option value="Grade C">Grade C</option>
+                <option value="Commercial">Commercial</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Inspector Name</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Inspector name"
+                value={formData.inspector || currentUser.name || ''}
+                onChange={e => setFormData({ ...formData, inspector: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
               <label className="form-label">Flatness</label>
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Flat +/- 0.5mm"
                 value={formData.flatness || ''}
                 onChange={e => setFormData({ ...formData, flatness: e.target.value })}
               />
@@ -2325,48 +3775,83 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Mirror Gloss >90 GU"
                 value={formData.surface || ''}
                 onChange={e => setFormData({ ...formData, surface: e.target.value })}
               />
             </div>
-          </div>
+            <div className="form-group">
+              <label className="form-label">Thickness Check</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="e.g. 20mm (+/- 0.2mm precision)"
+                value={formData.thicknessCheck || ''}
+                onChange={e => setFormData({ ...formData, thicknessCheck: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Defect Type</label>
+              <select
+                className="form-select"
+                value={formData.defectType || 'None'}
+                onChange={e => setFormData({ ...formData, defectType: e.target.value })}
+              >
+                <option value="None">None (Defect Free)</option>
+                <option value="Scratches / Swirls">Scratches / Swirls</option>
+                <option value="Dull Spots">Dull Spots</option>
+                <option value="Chipped Edges">Chipped Edges</option>
+                <option value="Thickness Variation">Thickness Variation</option>
+                <option value="Pinhole Voids">Pinhole Voids</option>
+              </select>
+            </div>
+            <div className="form-group col-span-2">
+              <label className="form-label">Remarks</label>
+              <textarea
+                className="form-textarea"
+                rows={2}
+                placeholder="Enter inspection remarks or notes..."
+                value={formData.remarks || ''}
+                onChange={e => setFormData({ ...formData, remarks: e.target.value })}
+              />
+            </div>
+          </>
         )}
 
         {/* Cut to Size Form */}
         {drawerType === 'cut' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
-              <label className="form-label">Source Slab *</label>
+              <label className="form-label">Source Slab</label>
               <select
                 className="form-select"
                 value={formData.slabId || ''}
                 onChange={e => setFormData({ ...formData, slabId: e.target.value })}
-                required
               >
+                <option value="">Select Source Slab (Optional)</option>
                 {slabs.map(s => (
                   <option key={s.id} value={s.id}>{s.slabNo} ({s.sqft} Sq.Ft)</option>
                 ))}
               </select>
             </div>
             <div className="form-group col-span-2">
-              <label className="form-label">Cut Size Name *</label>
+              <label className="form-label">Cut Size Name</label>
               <input
                 type="text"
                 className="form-input"
                 placeholder="e.g. 24x24 Inch Tiles"
                 value={formData.cutSizeName || ''}
                 onChange={e => setFormData({ ...formData, cutSizeName: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Pieces Count *</label>
+              <label className="form-label">Pieces Count</label>
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 48"
                 value={formData.piecesCount || ''}
                 onChange={e => setFormData({ ...formData, piecesCount: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
@@ -2380,12 +3865,12 @@ export function SupplierInventoryHub() {
                 <option value="Scrap">Mark as Scrap</option>
               </select>
             </div>
-          </div>
+          </>
         )}
 
         {/* Box Form */}
         {drawerType === 'box' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group">
               <label className="form-label">Box Type</label>
               <select
@@ -2405,6 +3890,7 @@ export function SupplierInventoryHub() {
                 value={formData.stoneType || ''}
                 onChange={e => setFormData({ ...formData, stoneType: e.target.value })}
               >
+                <option value="">Select Stone Type (Optional)</option>
                 {stoneTypes.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
               </select>
             </div>
@@ -2413,6 +3899,7 @@ export function SupplierInventoryHub() {
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 20"
                 value={formData.capacity || ''}
                 onChange={e => setFormData({ ...formData, capacity: e.target.value })}
               />
@@ -2422,55 +3909,55 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Zone C / A-Frame 01"
                 value={formData.bay || ''}
                 onChange={e => setFormData({ ...formData, bay: e.target.value })}
               />
             </div>
-          </div>
+          </>
         )}
 
         {/* Putaway Form */}
         {drawerType === 'putaway' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
-              <label className="form-label">Item ID to Move *</label>
+              <label className="form-label">Item ID to Move</label>
               <input
                 type="text"
                 className="form-input"
-                placeholder="SLB-0001, PC-0001, BLK-0001"
+                placeholder="e.g. SLB-0001, PC-0001, BLK-0001"
                 value={formData.itemId || ''}
                 onChange={e => setFormData({ ...formData, itemId: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Destination Yard *</label>
+              <label className="form-label">Destination Yard</label>
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Carrara Yard Main"
                 value={formData.toYard || ''}
                 onChange={e => setFormData({ ...formData, toYard: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Destination Zone *</label>
+              <label className="form-label">Destination Zone</label>
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Zone C - Slabs"
                 value={formData.toZone || ''}
                 onChange={e => setFormData({ ...formData, toZone: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Destination Bay / Rack *</label>
+              <label className="form-label">Destination Bay / Rack</label>
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. A-Frame 03"
                 value={formData.toBay || ''}
                 onChange={e => setFormData({ ...formData, toBay: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
@@ -2478,7 +3965,7 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
-                placeholder="BOX-0001"
+                placeholder="e.g. BOX-0001"
                 value={formData.toBox || ''}
                 onChange={e => setFormData({ ...formData, toBox: e.target.value })}
               />
@@ -2488,24 +3975,25 @@ export function SupplierInventoryHub() {
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. Relocated for export staging"
                 value={formData.reason || ''}
                 onChange={e => setFormData({ ...formData, reason: e.target.value })}
               />
             </div>
-          </div>
+          </>
         )}
 
         {/* Count Sheet Form */}
         {drawerType === 'count' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <>
             <div className="form-group col-span-2">
-              <label className="form-label">Item ID *</label>
+              <label className="form-label">Item ID</label>
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. SLB-0001 or BLK-0001"
                 value={formData.item || ''}
                 onChange={e => setFormData({ ...formData, item: e.target.value })}
-                required
               />
             </div>
             <div className="form-group">
@@ -2513,21 +4001,22 @@ export function SupplierInventoryHub() {
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 1"
                 value={formData.systemQuantity || ''}
                 onChange={e => setFormData({ ...formData, systemQuantity: e.target.value })}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Physical Quantity *</label>
+              <label className="form-label">Physical Quantity</label>
               <input
                 type="number"
                 className="form-input"
+                placeholder="e.g. 1"
                 value={formData.physicalQuantity || ''}
                 onChange={e => setFormData({ ...formData, physicalQuantity: e.target.value })}
-                required
               />
             </div>
-          </div>
+          </>
         )}
       </FormDrawer>
         </div>

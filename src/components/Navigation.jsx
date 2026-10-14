@@ -30,15 +30,32 @@ import {
   Truck,
   ShieldCheck,
   Scissors,
-  Move
+  Move,
+  Globe
 } from 'lucide-react';
 import { VengoLogo } from './VengoLogo';
 
 export function Sidebar() {
-  const { currentRole, activeClient } = useApp();
+  const { currentRole, activeClient, t } = useApp();
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState({ Inventory: true });
   const location = useLocation();
+
+  // Accordion state: At a time, only one submenu is open
+  const getRouteMenu = () => {
+    if (location.pathname.startsWith('/client-setup')) return 'Client Setup';
+    if (location.pathname.startsWith('/inventory')) return 'Inventory';
+    if (location.pathname.startsWith('/masters')) return 'Master Setup';
+    if (location.pathname.startsWith('/settings')) return 'Settings';
+    return null;
+  };
+  const [openMenu, setOpenMenu] = useState(getRouteMenu);
+
+  useEffect(() => {
+    const routeMenu = getRouteMenu();
+    if (routeMenu) {
+      setOpenMenu(routeMenu);
+    }
+  }, [location.pathname]);
 
   // 1. QT Super Admin Menu: Master Setup
   const superAdminMenu = [
@@ -46,29 +63,52 @@ export function Sidebar() {
   ];
 
   // 2. Supplier/Client Admin Menu:
-  // - Dashboard, Master Data, Inventory (with Sub-menus), Purchase Orders, Receipts, Sales Invoices, Accounts, Returns & Defects, Settings
+  // - Dashboard, Client Setup (Suppliers, Buyers, Contractors), Masters (Inventory submenu), Inventory (with Sub-menus), Purchase Orders, Receipts, Sales Invoices, Accounts, Settings
   const supplierClientAdminMenu = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Master Data', path: '/masters', icon: Users },
+    {
+      label: 'Client Setup',
+      path: '/client-setup?tab=suppliers',
+      icon: Users,
+      children: [
+        { label: 'Suppliers', path: '/client-setup?tab=suppliers' },
+        { label: 'Buyers', path: '/client-setup?tab=buyers' },
+        { label: 'Contractors', path: '/client-setup?tab=contractors' }
+      ]
+    },
+    {
+      label: 'Masters',
+      path: '/masters?submenu=inventory',
+      icon: Layers,
+      children: [
+        { label: 'Inventory', path: '/masters?submenu=inventory' }
+      ]
+    },
     {
       label: 'Inventory',
       path: '/inventory',
       icon: Box,
       children: [
-        { label: 'Inbound', path: '/inventory?submenu=inbound', icon: Truck },
-        { label: 'Quality Control', path: '/inventory?submenu=qc', icon: ShieldCheck },
-        { label: 'Processing', path: '/inventory?submenu=processing', icon: Scissors },
-        { label: 'Storage & Labels', path: '/inventory?submenu=storage', icon: Move },
-        { label: 'Stock', path: '/inventory?submenu=stock', icon: Layers },
-        { label: 'Exceptions', path: '/inventory?submenu=exceptions', icon: AlertTriangle }
+        { label: 'Inbound', path: '/inventory?submenu=inbound' },
+        { label: 'Quality Control', path: '/inventory?submenu=qc' },
+        { label: 'Processing', path: '/inventory?submenu=processing' },
+        { label: 'Storage & Labels', path: '/inventory?submenu=storage' },
+        { label: 'Stock', path: '/inventory?submenu=stock' },
+        { label: 'Exceptions', path: '/inventory?submenu=exceptions' }
       ]
     },
     { label: 'Purchase Orders', path: '/purchase-orders', icon: FileCheck2 },
     { label: 'Receipts', path: '/receipts', icon: Scale },
     { label: 'Sales Invoices', path: '/sales-invoices', icon: Receipt },
-    { label: 'Accounts', path: '/accounts', icon: DollarSign },
-    { label: 'Returns & Defects', path: '/returns', icon: AlertTriangle },
-    { label: 'Settings', path: '/settings', icon: Settings }
+    {
+      label: 'Settings',
+      path: '/settings?submenu=general',
+      icon: Settings,
+      children: [
+        { label: 'General Settings', path: '/settings?submenu=general' },
+        { label: 'Custom Fields Builder', path: '/settings?submenu=custom-fields' }
+      ]
+    }
   ];
 
   // 3. Client HR Admin Menu:
@@ -107,14 +147,21 @@ export function Sidebar() {
       if (location.pathname !== pathBase) return false;
       const targetParams = new URLSearchParams(queryStr);
       const currentParams = new URLSearchParams(location.search);
-      // If target specifies 'submenu', check if current search has matching submenu (defaulting to inbound)
+      // If target specifies 'submenu', check if current search has matching submenu
       if (targetParams.has('submenu')) {
-        const currentSub = currentParams.get('submenu') || 'inbound';
+        const defaultSub = location.pathname === '/settings'
+          ? 'general'
+          : location.pathname === '/masters'
+            ? 'inventory'
+            : 'inbound';
+        const currentSub = currentParams.get('submenu') || defaultSub;
         return currentSub === targetParams.get('submenu');
       }
       // If target specifies 'tab', check if current search has the same 'tab'
       if (targetParams.has('tab')) {
-        return currentParams.get('tab') === targetParams.get('tab');
+        const defaultTab = location.pathname === '/client-setup' ? 'suppliers' : null;
+        const currentTab = currentParams.get('tab') || defaultTab;
+        return currentTab === targetParams.get('tab');
       }
       return location.search === `?${queryStr}`;
     }
@@ -216,19 +263,26 @@ export function Sidebar() {
           const Icon = item.icon;
           const active = isItemActive(item.path);
           const hasChildren = item.children && item.children.length > 0;
-          const isExpanded = expandedMenus[item.label] ?? (location.pathname === item.path);
+          const isExpanded = openMenu === item.label;
 
           return (
             <div key={item.path + item.label} style={{ marginBottom: '2px' }}>
               <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
                 <Link
                   to={item.path}
+                  onClick={() => {
+                    if (hasChildren) {
+                      setOpenMenu(item.label);
+                    } else {
+                      setOpenMenu(null);
+                    }
+                  }}
                   className={`sidebar-link ${active ? 'active' : ''}`}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed ? t(item.label) : undefined}
                   style={{ flex: 1 }}
                 >
                   <Icon size={16} className="sidebar-icon" />
-                  {!collapsed && <span>{item.label}</span>}
+                  {!collapsed && <span>{t(item.label)}</span>}
                 </Link>
                 {!collapsed && hasChildren && (
                   <button
@@ -236,10 +290,7 @@ export function Sidebar() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      setExpandedMenus(prev => ({
-                        ...prev,
-                        [item.label]: !isExpanded
-                      }));
+                      setOpenMenu(prev => (prev === item.label ? null : item.label));
                     }}
                     style={{
                       background: 'none',
@@ -265,9 +316,8 @@ export function Sidebar() {
               </div>
 
               {!collapsed && hasChildren && isExpanded && (
-                <div style={{ paddingLeft: '6px', marginTop: '2px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ marginTop: '2px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   {item.children.map(child => {
-                    const ChildIcon = child.icon;
                     const childActive = isItemActive(child.path);
                     return (
                       <Link
@@ -275,8 +325,7 @@ export function Sidebar() {
                         to={child.path}
                         className={`sidebar-sublink ${childActive ? 'active' : ''}`}
                       >
-                        <ChildIcon size={13} style={{ flexShrink: 0 }} />
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{child.label}</span>
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(child.label)}</span>
                       </Link>
                     );
                   })}
@@ -289,9 +338,9 @@ export function Sidebar() {
 
       {!hasSettingsInMenu && (
         <div className="sidebar-footer">
-          <Link to="/settings" className={`sidebar-link ${location.pathname === '/settings' ? 'active' : ''}`} title={collapsed ? "Settings" : undefined}>
+          <Link to="/settings" className={`sidebar-link ${location.pathname === '/settings' ? 'active' : ''}`} title={collapsed ? t("Settings") : undefined}>
             <Settings size={16} className="sidebar-icon" />
-            {!collapsed && <span>Settings</span>}
+            {!collapsed && <span>{t('Settings')}</span>}
           </Link>
         </div>
       )}
@@ -307,7 +356,10 @@ export function Topbar() {
     activeClient,
     clients,
     switchClient,
-    notifications
+    notifications,
+    language,
+    setLanguage,
+    t
   } = useApp();
 
   const [showNotif, setShowNotif] = useState(false);
@@ -316,16 +368,42 @@ export function Topbar() {
   return (
     <header className="app-topbar">
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '15px' }}>
-        <span style={{ color: 'var(--muted)', fontWeight: 500 }}>Welcome,</span>
+        <span style={{ color: 'var(--muted)', fontWeight: 500 }}>{t('Welcome')},</span>
         <span style={{ color: 'var(--ink)', fontWeight: 700 }}>{currentUser?.name || 'Aditya Varma'}</span>
       </div>
 
       <div className="topbar-actions">
+        {/* Language Switcher in Topbar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginRight: '4px' }}>
+          <Globe size={14} style={{ color: 'var(--muted)' }} />
+          <select
+            className="form-control"
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            style={{
+              padding: '2px 8px',
+              fontSize: '12px',
+              height: '28px',
+              fontWeight: 600,
+              backgroundColor: 'var(--surface-sunken)',
+              border: '1px solid var(--line)',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+            title={t('Language')}
+          >
+            <option value="English">English</option>
+            <option value="Hindi">हिन्दी</option>
+            <option value="Odia">ଓଡ଼ିଆ</option>
+            <option value="Telugu">తెలుగు</option>
+          </select>
+        </div>
+
         {/* Notifications */}
         <div style={{ position: 'relative' }}>
           <button
             className="iconbtn"
-            title="Notifications"
+            title={t('Notifications')}
             onClick={() => setShowNotif(!showNotif)}
             style={{ position: 'relative' }}
           >

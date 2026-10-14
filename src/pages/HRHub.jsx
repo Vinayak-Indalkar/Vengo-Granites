@@ -25,7 +25,6 @@ export function HRHub() {
   const subMenuConfig = {
     personnel: [
       { key: 'employees', label: 'Employees' },
-      { key: 'contractors', label: 'Contractors' },
       { key: 'workers', label: 'Contractor Workers' }
     ],
     attendance: [

@@ -9,6 +9,7 @@ import { MasterDataHub } from './pages/MasterDataHub';
 import { InventoryHub } from './pages/InventoryHub';
 import { HRHub } from './pages/HRHub';
 import { AccountsHub } from './pages/AccountsHub';
+import { ClientSetupHub } from './pages/ClientSetupHub';
 import { PurchaseOrderHub } from './pages/PurchaseOrderHub';
 import { PurchaseRequestsScreen } from './pages/PurchasePages';
 import { ReceiptsHub } from './pages/ReceiptsHub';
@@ -119,6 +120,7 @@ function AppLayout() {
           <Route path="/activity-log" element={<SuperAdminActivityLogScreen />} />
 
           {/* Core ERP Routes */}
+          <Route path="/client-setup" element={<ClientSetupHub />} />
           <Route path="/masters" element={<MasterDataHub />} />
           <Route path="/hr" element={<HRHub />} />
           <Route path="/inventory" element={<InventoryHub />} />

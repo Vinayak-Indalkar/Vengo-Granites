@@ -752,6 +752,7 @@ export function DataTable({
                 <tr
                   key={row.id || rIdx}
                   className="data-table-row"
+                  style={{ cursor: onRowClick ? 'pointer' : 'default' }}
                   onClick={(e) => {
                     if (e.target.closest('button, a, input, select, .iconbtn, .btn, .action-dropdown')) {
                       return;
@@ -777,7 +778,11 @@ export function DataTable({
                           boxShadow: isActionCol ? '-2px 0 6px rgba(0,0,0,0.03)' : 'none'
                         }}
                       >
-                        {col.render ? col.render(row) : row[col.accessor]}
+                        {col.render
+                          ? col.render(row)
+                          : (typeof col.accessor === 'function'
+                              ? col.accessor(row)
+                              : row[col.accessor])}
                       </td>
                     );
                   })}

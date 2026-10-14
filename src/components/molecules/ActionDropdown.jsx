@@ -142,19 +142,29 @@ export function ActionDropdown({
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsOpen(false);
-                    const isDelete = item.danger || String(item.label || '').toLowerCase().includes('delete') || String(item.label || '').toLowerCase().includes('remove');
-                    if (item.confirm || isDelete) {
-                      const confirmObj = item.confirm || {};
-                      setActiveConfirm({
-                        title: confirmObj.title || (isDelete ? 'Confirm Delete' : 'Confirm Action'),
-                        message: confirmObj.message || (typeof item.confirm === 'string' ? item.confirm : 'Are you sure you want to proceed with this delete action? This cannot be undone.'),
-                        confirmLabel: confirmObj.confirmLabel || (isDelete ? 'Delete' : 'Confirm'),
-                        danger: item.danger ?? isDelete,
-                        onConfirm: item.onClick
-                      });
-                    } else if (item.onClick) {
-                      item.onClick();
+                    if (item.disabled) return;
+
+                    // If confirm is explicitly false, run directly without popup
+                    if (item.confirm === false) {
+                      if (item.onClick) item.onClick();
+                      return;
                     }
+
+                    const isDelete = item.danger || String(item.label || '').toLowerCase().includes('delete') || String(item.label || '').toLowerCase().includes('remove') || String(item.label || '').toLowerCase().includes('archive') || String(item.label || '').toLowerCase().includes('reject');
+                    const confirmObj = typeof item.confirm === 'object' && item.confirm !== null ? item.confirm : {};
+                    const customMessage = typeof item.confirm === 'string' ? item.confirm : confirmObj.message;
+                    
+                    const defaultMessage = isDelete
+                      ? `Are you sure you want to proceed with ${item.label ? item.label.toLowerCase() : 'this action'}? This cannot be undone.`
+                      : `Are you sure you want to ${item.label ? item.label.toLowerCase() : 'proceed with this action'}?`;
+
+                    setActiveConfirm({
+                      title: confirmObj.title || (isDelete ? `Confirm ${item.label || 'Delete'}` : `Confirm ${item.label || 'Action'}`),
+                      message: customMessage || defaultMessage,
+                      confirmLabel: confirmObj.confirmLabel || (isDelete ? (item.label || 'Delete') : 'Confirm'),
+                      danger: confirmObj.danger ?? item.danger ?? isDelete,
+                      onConfirm: item.onClick
+                    });
                   }}
                   style={{
                     display: 'flex',
