@@ -11,6 +11,11 @@ import { BuyerFormDrawer } from '../components/clientSetup/BuyerFormDrawer';
 import { ContractorListScreen } from '../components/clientSetup/ContractorListScreen';
 import { ContractorDetailScreen } from '../components/clientSetup/ContractorDetailScreen';
 import { ContractorFormDrawer } from '../components/clientSetup/ContractorFormDrawer';
+import { PlantTab } from '../components/clientSetup/PlantTab';
+import { ClientUsersTab } from '../components/clientSetup/ClientUsersTab';
+import { ClientRolesTab } from '../components/clientSetup/ClientRolesTab';
+import { ClientMenusTab } from '../components/clientSetup/ClientMenusTab';
+import { ContractorWorkersTab } from '../components/clientSetup/ContractorWorkersTab';
 import { CustomFieldsModal } from '../components/clientSetup/CustomFieldsModal';
 import { ImportExcelModal } from '../components/clientSetup/ImportExcelModal';
 import { ConfirmDialog } from '../components/CommonComponents';
@@ -33,21 +38,55 @@ export function ClientSetupHub() {
     updateContractor,
     deleteContractor,
     restoreContractor,
-    currentRole,
     t
   } = useApp();
 
-  // Tab: 'suppliers' | 'buyers' | 'contractors'
-  const currentTab = searchParams.get('tab') || 'suppliers';
+  // Determine active Submenu: 'suppliers' | 'buyers' | 'contractors'
+  const currentSubmenu = searchParams.get('submenu') || (
+    searchParams.get('tab') === 'buyers' ? 'buyers' :
+    searchParams.get('tab') === 'contractors' ? 'contractors' : 'suppliers'
+  );
+
+  // Tab definitions per submenu
+  const submenuTabs = {
+    suppliers: [
+      { key: 'supplier', label: 'Supplier' },
+      { key: 'plant', label: 'Plant' },
+      { key: 'users', label: 'Users' },
+      { key: 'roles', label: 'Roles' },
+      { key: 'menus', label: 'Menu & Submenus' }
+    ],
+    buyers: [
+      { key: 'buyers', label: 'Buyers' },
+      { key: 'users', label: 'Users' },
+      { key: 'roles', label: 'Roles' },
+      { key: 'menus', label: 'Menu & Submenus' }
+    ],
+    contractors: [
+      { key: 'contractors', label: 'Contractors' },
+      { key: 'workers', label: 'Workers' },
+      { key: 'users', label: 'Users' },
+      { key: 'roles', label: 'Roles' },
+      { key: 'menus', label: 'Menu & Submenus' }
+    ]
+  };
+
+  const activeTabsList = submenuTabs[currentSubmenu] || submenuTabs.suppliers;
+  const defaultTabForSubmenu = activeTabsList[0].key;
+
+  // Active secondary tab
+  const rawTab = searchParams.get('tab');
+  const isRawTabValid = activeTabsList.some(t => t.key === rawTab);
+  const currentTab = isRawTabValid ? rawTab : defaultTabForSubmenu;
 
   const setTab = (tabKey) => {
-    setSearchParams({ tab: tabKey });
+    setSearchParams({ submenu: currentSubmenu, tab: tabKey });
     setSelectedSupplierId(null);
     setSelectedBuyerId(null);
     setSelectedContractorId(null);
   };
 
-  // Selection states
+  // Selection states for drill-down details
   const [selectedSupplierId, setSelectedSupplierId] = useState(null);
   const [selectedBuyerId, setSelectedBuyerId] = useState(null);
   const [selectedContractorId, setSelectedContractorId] = useState(null);
@@ -193,7 +232,7 @@ export function ClientSetupHub() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
-      {/* Top Secondary Tab Header - Suppliers, Buyers, Contractors (No Icons, No Counts) */}
+      {/* Top Secondary Tab Header (Like Inbound UI) */}
       <div style={{
         padding: '10px 20px',
         borderBottom: '1px solid var(--line)',
@@ -203,34 +242,23 @@ export function ClientSetupHub() {
         alignItems: 'center',
         flexShrink: 0
       }}>
-        {/* Left: Clean Text-Only Tabs */}
+        {/* Left: Clean Text-Only Tabs matching Inbound UI */}
         <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', alignItems: 'center' }}>
-          <button
-            type="button"
-            className={`btn btn-sm ${currentTab === 'suppliers' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setTab('suppliers')}
-            style={{ whiteSpace: 'nowrap', fontWeight: currentTab === 'suppliers' ? 700 : 500, fontSize: '13px' }}
-          >
-            Suppliers
-          </button>
-
-          <button
-            type="button"
-            className={`btn btn-sm ${currentTab === 'buyers' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setTab('buyers')}
-            style={{ whiteSpace: 'nowrap', fontWeight: currentTab === 'buyers' ? 700 : 500, fontSize: '13px' }}
-          >
-            Buyers
-          </button>
-
-          <button
-            type="button"
-            className={`btn btn-sm ${currentTab === 'contractors' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setTab('contractors')}
-            style={{ whiteSpace: 'nowrap', fontWeight: currentTab === 'contractors' ? 700 : 500, fontSize: '13px' }}
-          >
-            Contractors
-          </button>
+          {activeTabsList.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`btn btn-sm ${currentTab === tab.key ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab(tab.key)}
+              style={{
+                whiteSpace: 'nowrap',
+                fontWeight: currentTab === tab.key ? 700 : 500,
+                fontSize: '13px'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Right: Master Utilities */}
@@ -262,67 +290,121 @@ export function ClientSetupHub() {
       {/* Main Content Area */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div className="page-wrapper">
-          {/* TAB 1: SUPPLIERS */}
-          {currentTab === 'suppliers' && (
-            selectedSupplierId ? (
-              <SupplierDetailScreen
-                supplierId={selectedSupplierId}
-                onBack={() => setSelectedSupplierId(null)}
-                onEdit={handleOpenEditSupplier}
-                onDelete={handleDeleteSupplierPrompt}
-                onRestore={restoreSupplier}
-              />
-            ) : (
-              <SupplierListScreen
-                onSelectSupplier={(id) => setSelectedSupplierId(id)}
-                onOpenAdd={handleOpenAddSupplier}
-                onOpenEdit={handleOpenEditSupplier}
-                onDeleteSupplier={handleDeleteSupplierPrompt}
-                onRestoreSupplier={restoreSupplier}
-              />
-            )
+          {/* ============================================================== */}
+          {/* SUBMENU: SUPPLIERS                                            */}
+          {/* ============================================================== */}
+          {currentSubmenu === 'suppliers' && (
+            <>
+              {/* Tab 1: Supplier */}
+              {currentTab === 'supplier' && (
+                selectedSupplierId ? (
+                  <SupplierDetailScreen
+                    supplierId={selectedSupplierId}
+                    onBack={() => setSelectedSupplierId(null)}
+                    onEdit={handleOpenEditSupplier}
+                    onDelete={handleDeleteSupplierPrompt}
+                    onRestore={restoreSupplier}
+                  />
+                ) : (
+                  <SupplierListScreen
+                    onSelectSupplier={(id) => setSelectedSupplierId(id)}
+                    onOpenAdd={handleOpenAddSupplier}
+                    onOpenEdit={handleOpenEditSupplier}
+                    onDeleteSupplier={handleDeleteSupplierPrompt}
+                    onRestoreSupplier={restoreSupplier}
+                  />
+                )
+              )}
+
+              {/* Tab 2: Plant */}
+              {currentTab === 'plant' && <PlantTab />}
+
+              {/* Tab 3: Users */}
+              {currentTab === 'users' && <ClientUsersTab scope="supplier" />}
+
+              {/* Tab 4: Roles */}
+              {currentTab === 'roles' && <ClientRolesTab scope="supplier" />}
+
+              {/* Tab 5: Menu & Submenus */}
+              {currentTab === 'menus' && <ClientMenusTab scope="supplier" />}
+            </>
           )}
 
-          {/* TAB 2: BUYERS */}
-          {currentTab === 'buyers' && (
-            selectedBuyerId ? (
-              <BuyerDetailScreen
-                buyerId={selectedBuyerId}
-                onBack={() => setSelectedBuyerId(null)}
-                onEdit={handleOpenEditBuyer}
-                onDelete={handleDeleteBuyerPrompt}
-                onRestore={restoreCustomer}
-              />
-            ) : (
-              <BuyerListScreen
-                onSelectBuyer={(id) => setSelectedBuyerId(id)}
-                onOpenAdd={handleOpenAddBuyer}
-                onOpenEdit={handleOpenEditBuyer}
-                onDeleteBuyer={handleDeleteBuyerPrompt}
-                onRestoreBuyer={restoreCustomer}
-              />
-            )
+          {/* ============================================================== */}
+          {/* SUBMENU: BUYERS                                               */}
+          {/* ============================================================== */}
+          {currentSubmenu === 'buyers' && (
+            <>
+              {/* Tab 1: Buyers */}
+              {currentTab === 'buyers' && (
+                selectedBuyerId ? (
+                  <BuyerDetailScreen
+                    buyerId={selectedBuyerId}
+                    onBack={() => setSelectedBuyerId(null)}
+                    onEdit={handleOpenEditBuyer}
+                    onDelete={handleDeleteBuyerPrompt}
+                    onRestore={restoreCustomer}
+                  />
+                ) : (
+                  <BuyerListScreen
+                    onSelectBuyer={(id) => setSelectedBuyerId(id)}
+                    onOpenAdd={handleOpenAddBuyer}
+                    onOpenEdit={handleOpenEditBuyer}
+                    onDeleteBuyer={handleDeleteBuyerPrompt}
+                    onRestoreBuyer={restoreCustomer}
+                  />
+                )
+              )}
+
+              {/* Tab 2: Users */}
+              {currentTab === 'users' && <ClientUsersTab scope="buyer" />}
+
+              {/* Tab 3: Roles */}
+              {currentTab === 'roles' && <ClientRolesTab scope="buyer" />}
+
+              {/* Tab 4: Menu & Submenus */}
+              {currentTab === 'menus' && <ClientMenusTab scope="buyer" />}
+            </>
           )}
 
-          {/* TAB 3: CONTRACTORS */}
-          {currentTab === 'contractors' && (
-            selectedContractorId ? (
-              <ContractorDetailScreen
-                contractorId={selectedContractorId}
-                onBack={() => setSelectedContractorId(null)}
-                onEdit={handleOpenEditContractor}
-                onDelete={handleDeleteContractorPrompt}
-                onRestore={restoreContractor}
-              />
-            ) : (
-              <ContractorListScreen
-                onSelectContractor={(id) => setSelectedContractorId(id)}
-                onOpenAdd={handleOpenAddContractor}
-                onOpenEdit={handleOpenEditContractor}
-                onDeleteContractor={handleDeleteContractorPrompt}
-                onRestoreContractor={restoreContractor}
-              />
-            )
+          {/* ============================================================== */}
+          {/* SUBMENU: CONTRACTORS                                          */}
+          {/* ============================================================== */}
+          {currentSubmenu === 'contractors' && (
+            <>
+              {/* Tab 1: Contractors */}
+              {currentTab === 'contractors' && (
+                selectedContractorId ? (
+                  <ContractorDetailScreen
+                    contractorId={selectedContractorId}
+                    onBack={() => setSelectedContractorId(null)}
+                    onEdit={handleOpenEditContractor}
+                    onDelete={handleDeleteContractorPrompt}
+                    onRestore={restoreContractor}
+                  />
+                ) : (
+                  <ContractorListScreen
+                    onSelectContractor={(id) => setSelectedContractorId(id)}
+                    onOpenAdd={handleOpenAddContractor}
+                    onOpenEdit={handleOpenEditContractor}
+                    onDeleteContractor={handleDeleteContractorPrompt}
+                    onRestoreContractor={restoreContractor}
+                  />
+                )
+              )}
+
+              {/* Tab 2: Workers */}
+              {currentTab === 'workers' && <ContractorWorkersTab />}
+
+              {/* Tab 3: Users */}
+              {currentTab === 'users' && <ClientUsersTab scope="contractor" />}
+
+              {/* Tab 4: Roles */}
+              {currentTab === 'roles' && <ClientRolesTab scope="contractor" />}
+
+              {/* Tab 5: Menu & Submenus */}
+              {currentTab === 'menus' && <ClientMenusTab scope="contractor" />}
+            </>
           )}
         </div>
       </div>

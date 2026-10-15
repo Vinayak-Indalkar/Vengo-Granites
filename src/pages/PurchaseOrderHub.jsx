@@ -1,54 +1,78 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Breadcrumb } from '../components/CommonComponents';
-import { POApprovalsScreen, OpenPOsScreen, PurchaseRequestsScreen } from './PurchasePages';
+import { BuyerPOList } from '../components/trade/BuyerPOList';
+import { QuarryPOList } from '../components/trade/QuarryPOList';
 
 export function PurchaseOrderHub() {
-  const { currentRole } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isApprover = currentRole === 'QT Super Admin' || currentRole === 'Supplier/Client Admin';
-  const defaultTab = isApprover ? 'approvals' : 'open';
-  const tab = searchParams.get('tab') || defaultTab;
+  const { tradeBuyerPOs = [], tradeQuarryPOs = [] } = useApp();
+
+  const submenu = searchParams.get('submenu') || 'buyer-pos';
+
+  // Count pending badges
+  const pendingBuyerPOCount = tradeBuyerPOs.filter(b => b.status === 'Pending').length;
+  const pendingQuarryPOCount = tradeQuarryPOs.filter(q => q.status === 'Pending Approval').length;
+
+  const tabsConfig = {
+    'buyer-pos': [
+      { key: 'pending', label: 'Pending', count: pendingBuyerPOCount },
+      { key: 'approved', label: 'Approved' },
+      { key: 'all', label: 'All' }
+    ],
+    'quarry-pos': [
+      { key: 'open', label: 'Open' },
+      { key: 'approvals', label: 'Approvals', count: pendingQuarryPOCount },
+      { key: 'closed', label: 'Closed' },
+      { key: 'new-po', label: 'New PO' }
+    ]
+  };
+
+  const activeTabsList = tabsConfig[submenu] || tabsConfig['buyer-pos'];
+  const defaultTab = submenu === 'quarry-pos' ? 'open' : activeTabsList[0].key;
+  const currentTab = searchParams.get('tab') || defaultTab;
 
   const setTab = (newTab) => {
-    setSearchParams({ tab: newTab });
+    setSearchParams({ submenu, tab: newTab });
   };
 
   return (
-    <div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+      {/* Secondary Horizontal Tab Bar */}
       <div style={{
-        padding: '12px 20px',
+        padding: '10px 20px',
         borderBottom: '1px solid var(--line)',
         backgroundColor: 'var(--white)',
         display: 'flex',
-        gap: '8px'
+        alignItems: 'center',
+        gap: '8px',
+        overflowX: 'auto',
+        flexShrink: 0
       }}>
-        {isApprover && (
+        {activeTabsList.map(t => (
           <button
-            className={`btn btn-sm ${tab === 'approvals' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setTab('approvals')}
+            key={t.key}
+            type="button"
+            className={`btn btn-sm ${currentTab === t.key ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setTab(t.key)}
+            style={{
+              whiteSpace: 'nowrap',
+              fontWeight: currentTab === t.key ? 600 : 500,
+              fontSize: '13px'
+            }}
           >
-            Approvals
+            {t.label}
           </button>
-        )}
-        <button
-          className={`btn btn-sm ${tab === 'open' ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setTab('open')}
-        >
-          Open Orders
-        </button>
-        <button
-          className={`btn btn-sm ${tab === 'new' ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setTab('new')}
-        >
-          New Request / PO
-        </button>
+        ))}
       </div>
 
-      {tab === 'approvals' && <POApprovalsScreen />}
-      {tab === 'open' && <OpenPOsScreen />}
-      {tab === 'new' && <PurchaseRequestsScreen />}
+      {/* Main Content Area */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="page-wrapper">
+          {submenu === 'buyer-pos' && <BuyerPOList activeTab={currentTab} />}
+          {submenu === 'quarry-pos' && <QuarryPOList activeTab={currentTab} />}
+        </div>
+      </div>
     </div>
   );
 }

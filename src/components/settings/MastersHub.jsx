@@ -933,29 +933,14 @@ export function MastersHub() {
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div className="page-wrapper">
           {/* Header Row: Title & Action (Matching Attendance Pattern) */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div>
               <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--ink)' }}>
                 {currentEntityObj.label}
               </h2>
-              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
-                {isSettingsRoute ? 'Settings • Masters' : 'Masters • Inventory'} &bull; {currentTabObj.label} &bull; {filteredData.length} Records
-              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <div style={{ position: 'relative', width: '220px' }}>
-                <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-                <input
-                  type="text"
-                  className="form-input form-input-sm"
-                  placeholder={`Search ${currentEntityObj.label}...`}
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  style={{ paddingLeft: '32px' }}
-                />
-              </div>
-
               <button className="btn btn-primary btn-sm" onClick={handleOpenAdd}>
                 <Plus size={14} />
                 <span>Add {currentEntityObj.singular}</span>

@@ -1,60 +1,138 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { SalesOrdersScreen, InvoicesScreen, CreditOverrideScreen, DispatchScreen } from './SalesPages';
+import { SalesOrdersBillingTab } from '../components/trade/SalesOrdersBillingTab';
 
 export function SalesHub() {
-  const { currentRole } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'orders';
+  const submenu = searchParams.get('submenu') || 'orders';
+  const tab = searchParams.get('tab') || (submenu === 'orders' ? 'sales-orders' : submenu === 'billing' ? 'invoices' : 'to-dispatch');
 
-  const setTab = (newTab) => {
-    setSearchParams({ tab: newTab });
+  const {
+    tradeSalesOrders = [],
+    tradeInvoices = [],
+    tradeDispatches = []
+  } = useApp();
+
+  const setSubmenuAndTab = (newSubmenu, defaultTab) => {
+    setSearchParams({ submenu: newSubmenu, tab: defaultTab });
   };
 
-  const canOverrideCredit = currentRole === 'QT Super Admin' || currentRole === 'Supplier/Client Admin';
+  const setTab = (newTab) => {
+    setSearchParams({ submenu, tab: newTab });
+  };
+
+  // Badge calculations
+  const pendingOverrideCount = tradeSalesOrders.filter(
+    s => s.creditStatus?.toLowerCase().includes('warning') || s.status === 'Held'
+  ).length;
+
+  const toDispatchCount = tradeDispatches.filter(
+    d => d.status === 'Pending' || d.status === 'To Dispatch'
+  ).length;
+
+  const overdueInvoiceCount = tradeInvoices.filter(
+    i => i.status === 'Overdue'
+  ).length;
 
   return (
-    <div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+      {/* Level 3: Tabs Navigation */}
       <div style={{
-        padding: '12px 20px',
+        padding: '10px 20px',
         borderBottom: '1px solid var(--line)',
         backgroundColor: 'var(--white)',
         display: 'flex',
-        gap: '8px'
+        alignItems: 'center',
+        gap: '8px',
+        overflowX: 'auto',
+        flexShrink: 0
       }}>
-        <button
-          className={`btn btn-sm ${tab === 'orders' ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setTab('orders')}
-        >
-          Orders
-        </button>
-        <button
-          className={`btn btn-sm ${tab === 'invoices' ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setTab('invoices')}
-        >
-          Invoices
-        </button>
-        {canOverrideCredit && (
-          <button
-            className={`btn btn-sm ${tab === 'override' ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setTab('override')}
-          >
-            Credit Override
-          </button>
+        {submenu === 'orders' && (
+          <>
+            <button
+              className={`btn btn-sm ${tab === 'sales-orders' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('sales-orders')}
+              style={{ fontWeight: tab === 'sales-orders' ? 700 : 500 }}
+            >
+              Sales Orders
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'reservations' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('reservations')}
+              style={{ fontWeight: tab === 'reservations' ? 700 : 500 }}
+            >
+              Reservations
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'credit-override' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('credit-override')}
+              style={{ fontWeight: tab === 'credit-override' ? 600 : 500 }}
+            >
+              Credit Override
+            </button>
+          </>
         )}
-        <button
-          className={`btn btn-sm ${tab === 'dispatch' ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setTab('dispatch')}
-        >
-          Challans & Dispatch
-        </button>
+
+        {submenu === 'billing' && (
+          <>
+            <button
+              className={`btn btn-sm ${tab === 'invoices' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('invoices')}
+              style={{ fontWeight: tab === 'invoices' ? 600 : 500 }}
+            >
+              Invoices
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'challans' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('challans')}
+              style={{ fontWeight: tab === 'challans' ? 600 : 500 }}
+            >
+              Challans
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'cancel-reissue' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('cancel-reissue')}
+              style={{ fontWeight: tab === 'cancel-reissue' ? 600 : 500 }}
+            >
+              Cancel/Reissue
+            </button>
+          </>
+        )}
+
+        {submenu === 'dispatch' && (
+          <>
+            <button
+              className={`btn btn-sm ${tab === 'to-dispatch' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('to-dispatch')}
+              style={{ fontWeight: tab === 'to-dispatch' ? 600 : 500 }}
+            >
+              To Dispatch
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'dispatched' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('dispatched')}
+              style={{ fontWeight: tab === 'dispatched' ? 700 : 500 }}
+            >
+              Dispatched
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'delivered' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('delivered')}
+              style={{ fontWeight: tab === 'delivered' ? 700 : 500 }}
+            >
+              Delivered
+            </button>
+          </>
+        )}
       </div>
 
-      {tab === 'orders' && <SalesOrdersScreen />}
-      {tab === 'invoices' && <InvoicesScreen />}
-      {tab === 'override' && <CreditOverrideScreen />}
-      {tab === 'dispatch' && <DispatchScreen />}
+      {/* Main Tab Content */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="page-wrapper">
+          <SalesOrdersBillingTab submenu={submenu} tab={tab} />
+        </div>
+      </div>
     </div>
   );
 }

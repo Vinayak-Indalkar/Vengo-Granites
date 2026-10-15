@@ -1,63 +1,90 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Breadcrumb } from '../components/CommonComponents';
 import { useApp } from '../context/AppContext';
-import { DefectiveStoreScreen, DebitNotesScreen, CreditNotesScreen, ScrapWriteOffScreen } from './ReturnsPages';
+import { ReturnsDefectsModuleTab } from '../components/trade/ReturnsDefectsModuleTab';
 
 export function ReturnsHub() {
-  const { currentRole } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'defective';
+  const submenu = searchParams.get('submenu') || 'returns';
+  const tab = searchParams.get('tab') || (submenu === 'returns' ? 'buyer-returns' : 'defective-store');
 
-  const setTab = (newTab) => {
-    setSearchParams({ tab: newTab });
+  const { tradeReturns = [] } = useApp();
+
+  const setSubmenuAndTab = (newSubmenu, defaultTab) => {
+    setSearchParams({ submenu: newSubmenu, tab: defaultTab });
   };
 
-  const isAdmin = currentRole === 'QT Super Admin' || currentRole === 'Supplier/Client Admin';
+  const setTab = (newTab) => {
+    setSearchParams({ submenu, tab: newTab });
+  };
+
+  const pendingReturnsCount = tradeReturns.filter(r => r.status === 'Raised').length;
 
   return (
-    <div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+      {/* Level 3: Tabs */}
       <div style={{
-        padding: '12px 20px',
+        padding: '10px 20px',
         borderBottom: '1px solid var(--line)',
         backgroundColor: 'var(--white)',
         display: 'flex',
-        gap: '8px'
+        alignItems: 'center',
+        gap: '8px',
+        overflowX: 'auto',
+        flexShrink: 0
       }}>
-        <button
-          className={`btn btn-sm ${tab === 'defective' ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setTab('defective')}
-        >
-          Defective Store / Damage
-        </button>
-        {isAdmin && (
+        {submenu === 'returns' && (
           <>
             <button
-              className={`btn btn-sm ${tab === 'debit' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setTab('debit')}
+              className={`btn btn-sm ${tab === 'buyer-returns' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('buyer-returns')}
+              style={{ fontWeight: tab === 'buyer-returns' ? 600 : 500 }}
+            >
+              Buyer Returns
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'credit-notes' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('credit-notes')}
+              style={{ fontWeight: tab === 'credit-notes' ? 600 : 500 }}
+            >
+              Credit Notes
+            </button>
+          </>
+        )}
+
+        {submenu === 'defects' && (
+          <>
+            <button
+              className={`btn btn-sm ${tab === 'defective-store' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('defective-store')}
+              style={{ fontWeight: tab === 'defective-store' ? 700 : 500 }}
+            >
+              Defective Store
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'debit-notes' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('debit-notes')}
+              style={{ fontWeight: tab === 'debit-notes' ? 700 : 500 }}
             >
               Debit Notes
             </button>
             <button
-              className={`btn btn-sm ${tab === 'credit' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setTab('credit')}
+              className={`btn btn-sm ${tab === 'scrap-write-off' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('scrap-write-off')}
+              style={{ fontWeight: tab === 'scrap-write-off' ? 700 : 500 }}
             >
-              Credit Notes
-            </button>
-            <button
-              className={`btn btn-sm ${tab === 'scrap' ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setTab('scrap')}
-            >
-              Scrap Write-Off
+              Scrap Write-off
             </button>
           </>
         )}
       </div>
 
-      {tab === 'defective' && <DefectiveStoreScreen />}
-      {tab === 'debit' && <DebitNotesScreen />}
-      {tab === 'credit' && <CreditNotesScreen />}
-      {tab === 'scrap' && <ScrapWriteOffScreen />}
+      {/* Main Tab Content */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="page-wrapper">
+          <ReturnsDefectsModuleTab submenu={submenu} tab={tab} />
+        </div>
+      </div>
     </div>
   );
 }

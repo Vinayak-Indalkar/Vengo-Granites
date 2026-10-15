@@ -249,8 +249,17 @@ export function DataTable({
   };
 
   const visibleColumns = useMemo(() => {
-    return columns.filter(col => {
-      const colId = col.accessor || col.header;
+    return (columns || []).map(col => {
+      const header = col.header || col.title || col.label || col.name || '';
+      const accessor = col.accessor || col.key || '';
+      return {
+        ...col,
+        header,
+        accessor,
+        key: accessor || header
+      };
+    }).filter(col => {
+      const colId = col.accessor || col.header || col.key || col.title;
       return !hiddenColumns[colId];
     });
   }, [columns, hiddenColumns]);
@@ -743,8 +752,66 @@ export function DataTable({
           <tbody>
             {currentRows.length === 0 ? (
               <tr>
-                <td colSpan={visibleColumns.length || 1} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--muted)' }}>
-                  {emptyMessage}
+                <td colSpan={visibleColumns.length || 1} style={{ textAlign: 'center', padding: '52px 20px', color: 'var(--muted)' }}>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    maxWidth: '420px',
+                    margin: '0 auto'
+                  }}>
+                    {/* Empty State Graphic */}
+                    <div style={{
+                      position: 'relative',
+                      width: '76px',
+                      height: '76px',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, var(--surface-sunken, #f8fafc) 0%, #f1f5f9 100%)',
+                      border: '1px solid var(--line, #e2e8f0)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '16px',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)'
+                    }}>
+                      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--teal-600, #0d9488)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                        <path d="m9 12 2 2 4-4" opacity="0.3" />
+                        <path d="M3 9h18" />
+                        <path d="M9 21V9" />
+                      </svg>
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '-2px',
+                        right: '-2px',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--white, #fff)',
+                        border: '1px solid var(--line, #e2e8f0)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--muted, #94a3b8)'
+                      }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink, #1e293b)', marginBottom: '5px' }}>
+                      {typeof emptyMessage === 'string' && emptyMessage !== 'No records found.' ? emptyMessage : 'No Records Available'}
+                    </div>
+
+                    <div style={{ fontSize: '12.5px', color: 'var(--muted, #64748b)', lineHeight: 1.5 }}>
+                      {tableSearch
+                        ? `No items matching "${tableSearch}". Try adjusting your filters or search keywords.`
+                        : 'There are currently no records in this view. Use the action button above to add new records.'}
+                    </div>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -766,6 +833,38 @@ export function DataTable({
                 >
                   {visibleColumns.map((col, cIdx) => {
                     const isActionCol = col.header === 'Action' || col.header === 'Actions';
+                    const cellVal = (col.accessor && typeof col.accessor !== 'function')
+                      ? row[col.accessor]
+                      : (col.key ? row[col.key] : undefined);
+
+                    let renderedContent = null;
+                    if (col.render) {
+                      try {
+                        if (col.render.length >= 2) {
+                          renderedContent = col.render(cellVal, row);
+                        } else if ((col.title || col.key) && !col.header && cellVal !== undefined) {
+                          renderedContent = col.render(cellVal, row);
+                        } else {
+                          renderedContent = col.render(row, cellVal);
+                        }
+                      } catch (e1) {
+                        try {
+                          renderedContent = col.render(cellVal, row);
+                        } catch (e2) {
+                          renderedContent = cellVal !== undefined && cellVal !== null ? String(cellVal) : '';
+                        }
+                      }
+                    } else if (typeof col.accessor === 'function') {
+                      try {
+                        renderedContent = col.accessor(row);
+                      } catch (e) {
+                        renderedContent = '';
+                      }
+                    } else {
+                      const v = col.accessor ? row[col.accessor] : (col.key ? row[col.key] : '');
+                      renderedContent = v !== undefined && v !== null ? String(v) : '';
+                    }
+
                     return (
                       <td
                         key={cIdx}
@@ -778,11 +877,7 @@ export function DataTable({
                           boxShadow: isActionCol ? '-2px 0 6px rgba(0,0,0,0.03)' : 'none'
                         }}
                       >
-                        {col.render
-                          ? col.render(row)
-                          : (typeof col.accessor === 'function'
-                              ? col.accessor(row)
-                              : row[col.accessor])}
+                        {renderedContent}
                       </td>
                     );
                   })}

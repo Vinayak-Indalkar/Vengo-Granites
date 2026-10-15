@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { Camera, QrCode, Search, CheckCircle, Zap, RefreshCw, X, ArrowRight, ShieldCheck, Box, Layers } from 'lucide-react';
+import { Camera, QrCode, Search, CheckCircle, Zap, RefreshCw, X, ArrowRight, ShieldCheck, Box, Layers, Route as RouteIcon } from 'lucide-react';
 
 export function QRScanModal({ isOpen, onClose, onScanSuccess }) {
+  const navigate = useNavigate();
   const { detailedRawBlocks, slabs, pieces, boxes, labels } = useApp();
   const [scanInput, setScanInput] = useState('');
   const [activeCam, setActiveCam] = useState('Camera 01 (Rear Macro)');
@@ -367,15 +369,30 @@ export function QRScanModal({ isOpen, onClose, onScanSuccess }) {
                   📍 {matchedRecord.location} • Status: <strong style={{ color: 'var(--teal-600)' }}>{matchedRecord.status}</strong>
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={handleScanSubmit}
-                style={{ backgroundColor: '#222350', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <span>Lookup Record</span>
-                <ArrowRight size={14} />
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    navigate(`/stone-journey/${matchedRecord.id}`);
+                    onClose();
+                  }}
+                  style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  title="Track full stone journey"
+                >
+                  <RouteIcon size={14} />
+                  <span>Stone Journey</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleScanSubmit}
+                  style={{ backgroundColor: '#222350', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <span>Lookup Record</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
             </div>
           ) : scanInput.trim() ? (
             <div style={{

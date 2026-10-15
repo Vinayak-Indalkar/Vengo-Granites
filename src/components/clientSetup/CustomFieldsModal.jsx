@@ -105,14 +105,13 @@ export function CustomFieldsModal({ isOpen, onClose }) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px' }}>
               <div>
-                <label className="form-label" style={{ fontSize: '11px', fontWeight: 600 }}>Field Label *</label>
+                <label className="form-label" style={{ fontSize: '11px', fontWeight: 600 }}>Field Label</label>
                 <input
                   type="text"
                   className="form-control"
                   value={fieldName}
                   onChange={(e) => setFieldName(e.target.value)}
                   placeholder="e.g. Mine Certificate Validity"
-                  required
                 />
               </div>
 

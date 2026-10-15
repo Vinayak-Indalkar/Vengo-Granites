@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as initialData from '../data/mockData';
 import { translate, SUPPORTED_LANGUAGES } from '../i18n/translations';
+import { TradeProvider, TradeContext } from './TradeContext';
 
 const AppContext = createContext();
 
@@ -4073,7 +4074,8 @@ export function AppProvider({ children }) {
   };
 
   return (
-    <AppContext.Provider value={{
+    <TradeProvider>
+      <AppContext.Provider value={{
       // Core state
       currentRole,
       setCurrentRole,
@@ -4150,6 +4152,7 @@ export function AppProvider({ children }) {
 
       // Defects & Returns
       defectiveStore,
+      setDefectiveStore,
       debitNotes,
       creditNotes,
       scrapWriteOffs,
@@ -4448,10 +4451,13 @@ export function AppProvider({ children }) {
       getTraceabilityChain
     }}>
       {children}
-    </AppContext.Provider>
+      </AppContext.Provider>
+    </TradeProvider>
   );
 }
 
 export function useApp() {
-  return useContext(AppContext);
+  const app = useContext(AppContext);
+  const trade = useContext(TradeContext);
+  return { ...app, ...(trade || {}) };
 }

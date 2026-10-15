@@ -129,7 +129,7 @@ export function ConfirmDialog({
  * FormDrawer (Organism)
  * Slide-over drawer form with integrated confirmation step
  */
-export function FormDrawer({ isOpen, onClose, title, children, onSubmit, submitLabel = 'Save', confirmSubmit = true }) {
+export function FormDrawer({ isOpen, onClose, title, children, onSubmit, submitLabel = 'Save', confirmSubmit = true, footer }) {
   const [showConfirm, setShowConfirm] = useState(false);
 
   if (!isOpen) return null;
@@ -166,14 +166,20 @@ export function FormDrawer({ isOpen, onClose, title, children, onSubmit, submitL
             <div className="drawer-body">
               {children}
             </div>
-            <div className="drawer-footer">
-              <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary btn-sm">
-                {submitLabel}
-              </button>
-            </div>
+            {footer ? (
+              <div className="drawer-footer">
+                {footer}
+              </div>
+            ) : (
+              <div className="drawer-footer">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary btn-sm">
+                  {submitLabel}
+                </button>
+              </div>
+            )}
           </form>
         </div>
       </div>
@@ -194,15 +200,18 @@ export function FormDrawer({ isOpen, onClose, title, children, onSubmit, submitL
 
 /**
  * ViewDrawer (Organism)
- * Detailed inspect view drawer for table row records
+ * Detailed inspect view drawer for table row records matching universal drawer design
  */
 export function ViewDrawer({
   isOpen,
   onClose,
+  title,
   data = {},
-  columns = []
+  columns = [],
+  children,
+  footer
 }) {
-  if (!isOpen || !data) return null;
+  if (!isOpen) return null;
 
   const cleanFieldEntries = [];
   const processedKeys = new Set();
@@ -223,26 +232,28 @@ export function ViewDrawer({
     });
   }
 
-  Object.entries(data).forEach(([key, val]) => {
-    if (processedKeys.has(key)) return;
-    if (['_raw', 'raw', 'isMock', 'password'].includes(key.toLowerCase())) return;
+  if (data && typeof data === 'object') {
+    Object.entries(data).forEach(([key, val]) => {
+      if (processedKeys.has(key)) return;
+      if (['_raw', 'raw', 'isMock', 'password'].includes(key.toLowerCase())) return;
 
-    const formattedHeader = key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/[_-]/g, ' ')
-      .replace(/^\w/, c => c.toUpperCase());
+      const formattedHeader = key
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/[_-]/g, ' ')
+        .replace(/^\w/, c => c.toUpperCase());
 
-    cleanFieldEntries.push({
-      key,
-      header: formattedHeader,
-      value: val,
-      render: null
+      cleanFieldEntries.push({
+        key,
+        header: formattedHeader,
+        value: val,
+        render: null
+      });
     });
-  });
+  }
 
-  const recordTitle = data.name || data.title || data.companyName || data.stoneCode || data.code || data.id || 'Record Details';
-  const recordStatus = data.status || null;
-  const recordId = data.id || data.code || null;
+  const recordTitle = title || data?.name || data?.title || data?.companyName || data?.stoneCode || data?.code || data?.id || 'Record Details';
+  const recordStatus = data?.status || null;
+  const recordId = data?.id || data?.code || null;
 
   return createPortal(
     <div className="drawer-backdrop" onClick={onClose}>
@@ -268,89 +279,62 @@ export function ViewDrawer({
           </button>
         </div>
 
-        <div
-          className="drawer-body"
-          style={{
-            padding: '20px',
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '12px',
-            alignContent: 'start',
-            backgroundColor: '#fafbfc'
-          }}
-        >
-          {cleanFieldEntries.map((f, idx) => {
-            const isFullWidth = (typeof f.value === 'string' && f.value.length > 35) || f.key === 'name' || f.key === 'Device Name' || f.header === 'Device Name' || f.key === 'address' || f.key === 'remarks' || f.key === 'description';
-            let displayContent = null;
+        <div className="drawer-body">
+          {children ? (
+            children
+          ) : (
+            cleanFieldEntries.map((f, idx) => {
+              const isFullWidth = (typeof f.value === 'string' && f.value.length > 35) ||
+                f.key === 'name' || f.key === 'Device Name' || f.header === 'Device Name' ||
+                f.key === 'address' || f.key === 'remarks' || f.key === 'description' || f.key === 'notes';
 
-            if (f.render) {
-              displayContent = f.render();
-            } else if (f.key === 'status') {
-              displayContent = <StatusBadge status={f.value} />;
-            } else if (f.key === 'logo' && f.value) {
-              displayContent = (
-                <img
-                  src={f.value || '/default-client-logo.png'}
-                  alt="Logo"
-                  onError={e => { e.currentTarget.src = '/default-client-logo.png'; }}
-                  style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--line)' }}
-                />
-              );
-            } else if (typeof f.value === 'boolean') {
-              displayContent = (
-                <span className={`badge ${f.value ? 'badge-emerald' : 'badge-soft'}`}>
-                  {f.value ? 'Yes' : 'No'}
-                </span>
-              );
-            } else if (Array.isArray(f.value)) {
-              displayContent = f.value.join(', ');
-            } else {
-              displayContent = f.value !== undefined && f.value !== null && f.value !== '' ? String(f.value) : '—';
-            }
+              let displayContent = null;
 
-            return (
-              <div
-                key={idx}
-                className={isFullWidth ? 'col-span-2' : ''}
-                style={{
-                  padding: '12px 14px',
-                  backgroundColor: '#ffffff',
-                  borderRadius: '8px',
-                  border: '1px solid var(--line)',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  minHeight: '62px'
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: 'var(--muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    marginBottom: '4px'
-                  }}
-                >
-                  {f.header}
+              if (f.render) {
+                displayContent = f.render();
+              } else if (f.key === 'status') {
+                displayContent = <StatusBadge status={f.value} />;
+              } else if (f.key === 'logo' && f.value) {
+                displayContent = (
+                  <img
+                    src={f.value || '/default-client-logo.png'}
+                    alt="Logo"
+                    onError={e => { e.currentTarget.src = '/default-client-logo.png'; }}
+                    style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--line)' }}
+                  />
+                );
+              } else if (typeof f.value === 'boolean') {
+                displayContent = (
+                  <span className={`badge ${f.value ? 'badge-emerald' : 'badge-soft'}`}>
+                    {f.value ? 'Yes' : 'No'}
+                  </span>
+                );
+              } else if (Array.isArray(f.value)) {
+                displayContent = f.value.join(', ');
+              } else {
+                displayContent = f.value !== undefined && f.value !== null && f.value !== '' ? String(f.value) : '—';
+              }
+
+              return (
+                <div key={idx} className={`form-group ${isFullWidth ? 'col-span-2' : ''}`}>
+                  <label className="form-label">{f.header}</label>
+                  <div className="detail-value">
+                    {displayContent}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: 'var(--ink)',
-                    wordBreak: 'break-word',
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}
-                >
-                  {displayContent}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
+        </div>
+
+        <div className="drawer-footer">
+          {footer ? (
+            footer
+          ) : (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+              Close
+            </button>
+          )}
         </div>
       </div>
     </div>,

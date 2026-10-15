@@ -836,6 +836,10 @@ a {
   width: 100%;
 }
 
+.drawer-body form {
+  display: contents;
+}
+
 .drawer-footer {
   padding: 12px 16px;
   border-top: 1px solid var(--line);
@@ -853,9 +857,26 @@ a {
   gap: 6px;
 }
 
+.col-span-2,
 .form-group.col-span-2,
 .form-col-full {
-  grid-column: span 2;
+  grid-column: 1 / -1;
+}
+
+.detail-value {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-8);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  word-break: break-word;
 }
 
 .form-label {

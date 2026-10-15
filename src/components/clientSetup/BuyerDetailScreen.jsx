@@ -729,14 +729,13 @@ export function BuyerDetailScreen({ buyerId, onBack, onEdit, onDelete, onRestore
             </h3>
             <form onSubmit={handleSaveContact} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label className="form-label" style={{ fontSize: '12px' }}>Full Name *</label>
+                <label className="form-label" style={{ fontSize: '12px' }}>Full Name</label>
                 <input
                   type="text"
                   className="form-control"
                   value={contactForm.name}
                   onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
                   placeholder="e.g. Ramesh Patel"
-                  required
                 />
               </div>
 
@@ -805,26 +804,24 @@ export function BuyerDetailScreen({ buyerId, onBack, onEdit, onDelete, onRestore
             </h3>
             <form onSubmit={handleSaveAddress} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label className="form-label" style={{ fontSize: '12px' }}>Location / Project Site Label *</label>
+                <label className="form-label" style={{ fontSize: '12px' }}>Location / Project Site Label</label>
                 <input
                   type="text"
                   className="form-control"
                   value={addressForm.label}
                   onChange={(e) => setAddressForm({ ...addressForm, label: e.target.value })}
                   placeholder="e.g. Palm Meadows Villa Site 14"
-                  required
                 />
               </div>
 
               <div>
-                <label className="form-label" style={{ fontSize: '12px' }}>Full Street Address *</label>
+                <label className="form-label" style={{ fontSize: '12px' }}>Full Street Address</label>
                 <input
                   type="text"
                   className="form-control"
                   value={addressForm.address}
                   onChange={(e) => setAddressForm({ ...addressForm, address: e.target.value })}
                   placeholder="Plot 42, Green Avenue, Sector 82"
-                  required
                 />
               </div>
 
@@ -889,14 +886,13 @@ export function BuyerDetailScreen({ buyerId, onBack, onEdit, onDelete, onRestore
             </h3>
             <form onSubmit={handleSaveDoc} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label className="form-label" style={{ fontSize: '12px' }}>Document Title *</label>
+                <label className="form-label" style={{ fontSize: '12px' }}>Document Title</label>
                 <input
                   type="text"
                   className="form-control"
                   value={docForm.name}
                   onChange={(e) => setDocForm({ ...docForm, name: e.target.value })}
                   placeholder="e.g. GST Registration Certificate"
-                  required
                 />
               </div>
 
@@ -976,14 +972,13 @@ export function BuyerDetailScreen({ buyerId, onBack, onEdit, onDelete, onRestore
             </p>
             <form onSubmit={handleConfirmBlock} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: 600 }}>Reason for Blocking *</label>
+                <label className="form-label" style={{ fontSize: '12px', fontWeight: 600 }}>Reason for Blocking</label>
                 <textarea
                   className="form-control"
                   rows={3}
                   value={blockReasonInput}
                   onChange={(e) => setBlockReasonInput(e.target.value)}
                   placeholder="e.g. Over credit limit (₹3.5L unpaid over 60 days) or Cheque bounce on invoice #INV-401"
-                  required
                 />
               </div>
 

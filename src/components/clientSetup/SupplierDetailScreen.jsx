@@ -768,14 +768,13 @@ export function SupplierDetailScreen({
             </div>
             <form onSubmit={handleSaveContact} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
-                <label className="form-label">Contact Name *</label>
+                <label className="form-label">Contact Name</label>
                 <input
                   type="text"
                   className="form-input"
                   placeholder="e.g. Marco Vieri"
                   value={contactForm.name}
                   onChange={e => setContactForm({ ...contactForm, name: e.target.value })}
-                  required
                 />
               </div>
 
@@ -791,14 +790,13 @@ export function SupplierDetailScreen({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Phone Number *</label>
+                <label className="form-label">Phone Number</label>
                 <input
                   type="text"
                   className="form-input"
                   placeholder="e.g. +39 335 123456"
                   value={contactForm.phone}
                   onChange={e => setContactForm({ ...contactForm, phone: e.target.value })}
-                  required
                 />
               </div>
 
@@ -865,7 +863,7 @@ export function SupplierDetailScreen({
             </div>
             <form onSubmit={handleSaveDoc} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
-                <label className="form-label">Document Type *</label>
+                <label className="form-label">Document Type</label>
                 <select
                   className="form-select"
                   value={docForm.type}
@@ -880,14 +878,13 @@ export function SupplierDetailScreen({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Document Name *</label>
+                <label className="form-label">Document Name</label>
                 <input
                   type="text"
                   className="form-input"
                   placeholder="e.g. Quarry Exploitation Permit"
                   value={docForm.name}
                   onChange={e => setDocForm({ ...docForm, name: e.target.value })}
-                  required
                 />
               </div>
 

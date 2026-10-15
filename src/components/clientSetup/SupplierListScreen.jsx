@@ -20,7 +20,7 @@ import {
   Scale,
   DollarSign
 } from 'lucide-react';
-import { DataTable, StatusBadge } from '../CommonComponents';
+import { DataTable, StatusBadge, ActionDropdown } from '../CommonComponents';
 
 export function SupplierListScreen({
   onSelectSupplier,
@@ -149,12 +149,20 @@ export function SupplierListScreen({
       )
     },
     {
-      header: 'Code',
+      header: 'Supplier Code',
       accessor: 'code',
       render: r => (
-        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--brand-color)' }}>
+        <button
+          type="button"
+          className="btn btn-xs btn-ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectSupplier(r.id);
+          }}
+          style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--brand-color)' }}
+        >
           {r.code || r.id}
-        </span>
+        </button>
       )
     },
     {
@@ -210,44 +218,35 @@ export function SupplierListScreen({
       render: r => {
         const isRowInactive = r.status === 'Inactive' || r.isArchived;
         return (
-          <div
-            style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => onSelectSupplier(r.id)}
-              title="View Detailed Dossier"
-            >
-              <Eye size={14} />
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => onOpenEdit(r)}
-              title="Edit Profile"
-            >
-              <Edit size={14} />
-            </button>
-            {isRowInactive ? (
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => onRestoreSupplier(r.id)}
-                title="Restore Supplier"
-                style={{ color: 'var(--teal-600)' }}
-              >
-                <RotateCcw size={14} />
-              </button>
-            ) : (
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => onDeleteSupplier(r.id)}
-                title="Archive / Remove Supplier"
-                style={{ color: 'var(--ruby-text)' }}
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-          </div>
+          <ActionDropdown
+            items={[
+              {
+                label: 'View Dossier / Details',
+                icon: Eye,
+                onClick: () => onSelectSupplier(r.id)
+              },
+              {
+                label: 'Edit Supplier',
+                icon: Edit,
+                onClick: () => onOpenEdit(r)
+              },
+              ...(isRowInactive ? [
+                {
+                  label: 'Restore Supplier',
+                  icon: RotateCcw,
+                  onClick: () => onRestoreSupplier(r.id)
+                }
+              ] : [
+                {
+                  label: 'Archive Supplier',
+                  icon: Trash2,
+                  danger: true,
+                  confirm: `Archive supplier ${r.name || r.code}?`,
+                  onClick: () => onDeleteSupplier(r.id)
+                }
+              ])
+            ]}
+          />
         );
       }
     }

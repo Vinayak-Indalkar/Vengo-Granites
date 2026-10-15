@@ -20,7 +20,7 @@ import {
   CheckCircle2,
   Ban
 } from 'lucide-react';
-import { DataTable, StatusBadge } from '../CommonComponents';
+import { DataTable, StatusBadge, ActionDropdown } from '../CommonComponents';
 
 export function BuyerListScreen({
   onSelectBuyer,
@@ -163,16 +163,22 @@ export function BuyerListScreen({
       header: 'Buyer Code',
       accessor: 'code',
       render: (row) => (
-        <div>
-          <span style={{ fontWeight: 700, color: 'var(--brand-color)', fontFamily: 'monospace', fontSize: '13px' }}>
-            {row.code || row.id}
-          </span>
+        <button
+          type="button"
+          className="btn btn-xs btn-ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectBuyer(row.id);
+          }}
+          style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--brand-color)' }}
+        >
+          {row.code || row.id}
           {row.isBlocked && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '6px', color: 'var(--rose-600)', fontSize: '10px', fontWeight: 700 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '6px', color: 'var(--rose-600)', fontSize: '10px', fontWeight: 700 }}>
               <Ban size={11} /> BLOCKED
-            </div>
+            </span>
           )}
-        </div>
+        </button>
       )
     },
     {
@@ -259,60 +265,63 @@ export function BuyerListScreen({
       accessor: 'status',
       render: (row) => {
         if (row.isBlocked) {
-          return <span className="badge badge-error" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Ban size={10} /> Blocked</span>;
+          return <span className="badge badge-ruby" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Ban size={10} /> Blocked</span>;
         }
-        if (row.isArchived || row.status === 'Inactive') {
-          return <span className="badge badge-neutral">Inactive</span>;
-        }
-        return <span className="badge badge-success">Active</span>;
+        return <StatusBadge status={row.status || 'Active'} />;
       }
     },
     {
       header: 'Actions',
       align: 'right',
-      render: (row) => (
-        <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => onSelectBuyer(row.id)}
-            title="View Details"
-            style={{ padding: '4px 6px' }}
-          >
-            <Eye size={14} />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => onOpenEdit(row)}
-            title="Edit Buyer"
-            style={{ padding: '4px 6px' }}
-          >
-            <Edit size={14} />
-          </button>
-          {row.isArchived || row.status === 'Inactive' ? (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm text-success"
-              onClick={() => onRestoreBuyer(row.id)}
-              title="Restore to Active"
-              style={{ padding: '4px 6px' }}
-            >
-              <RotateCcw size={14} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm text-danger"
-              onClick={() => onDeleteBuyer(row.id)}
-              title="Archive / Remove"
-              style={{ padding: '4px 6px' }}
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-        </div>
-      )
+      render: (row) => {
+        const isInactive = row.isArchived || row.status === 'Inactive';
+        return (
+          <ActionDropdown
+            items={[
+              {
+                label: 'View Dossier / Details',
+                icon: Eye,
+                onClick: () => onSelectBuyer(row.id)
+              },
+              {
+                label: 'Edit Buyer',
+                icon: Edit,
+                onClick: () => onOpenEdit(row)
+              },
+              ...(row.isBlocked ? [
+                {
+                  label: 'Unblock Buyer',
+                  icon: CheckCircle2,
+                  onClick: () => onToggleBlock && onToggleBlock(row.id)
+                }
+              ] : [
+                {
+                  label: 'Block Account',
+                  icon: Ban,
+                  danger: true,
+                  confirm: `Block credit and orders for ${row.name}?`,
+                  onClick: () => onToggleBlock && onToggleBlock(row.id)
+                }
+              ]),
+              ...(isInactive ? [
+                {
+                  label: 'Restore Buyer',
+                  icon: RotateCcw,
+                  onClick: () => onRestoreBuyer(row.id)
+                }
+              ] : [
+                {
+                  label: 'Archive Buyer',
+                  icon: Trash2,
+                  danger: true,
+                  confirm: `Archive buyer ${row.name || row.code}?`,
+                  onClick: () => onDeleteBuyer(row.id)
+                }
+              ])
+            ]}
+          />
+        );
+      }
     }
   ];
 

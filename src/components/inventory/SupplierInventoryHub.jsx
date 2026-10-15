@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
   DataTable,
@@ -40,7 +40,8 @@ import {
   X,
   Clock,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Route as RouteIcon
 } from 'lucide-react';
 import { StepTracker } from './StepTracker';
 import { TraceabilityModal } from './TraceabilityModal';
@@ -93,10 +94,7 @@ const SUB_MENUS = [
       { key: 'boxes', label: 'Boxes' },
       { key: 'move', label: 'Move' },
       { key: 'transfer', label: 'Transfer' },
-      { key: 'gen_label', label: 'Generate Label' },
-      { key: 'print', label: 'Print' },
-      { key: 'reprint', label: 'Reprint' },
-      { key: 'scan', label: 'Scan' }
+      { key: 'gen_label', label: 'Generate Label' }
     ]
   },
   {
@@ -201,6 +199,7 @@ export function SupplierInventoryHub() {
   } = useApp();
 
   // Active Submenu & Tab State linked to URL search parameters
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawSubMenu = searchParams.get('submenu') || 'inbound';
   const activeSubMenu = SUB_MENUS.some(m => m.key === rawSubMenu) ? rawSubMenu : 'inbound';
@@ -265,11 +264,7 @@ export function SupplierInventoryHub() {
 
   // Handle Tab Switch
   const handleTabChange = (tabKey) => {
-    if (tabKey === 'scan') {
-      setIsScanOpen(true);
-    } else {
-      setSearchParams({ submenu: activeSubMenu, tab: tabKey });
-    }
+    setSearchParams({ submenu: activeSubMenu, tab: tabKey });
   };
 
   // Active Tab Metadata (title and action button)
@@ -317,12 +312,6 @@ export function SupplierInventoryHub() {
           actionLabel: 'Generate Label',
           actionType: 'gen_label_drawer'
         };
-      case 'print':
-        return { title: 'Label Print Queue', actionLabel: null, actionType: null };
-      case 'reprint':
-        return { title: 'Label Reprint Audit Log', actionLabel: null, actionType: null };
-      case 'scan':
-        return { title: 'Optical Tag Scanner', actionLabel: 'Open Scanner', actionType: 'scan' };
       case 'stock_grid':
         return { title: 'Stock Grid (Universal Inventory)', actionLabel: null, actionType: null };
       case 'stock_blocks':
@@ -374,8 +363,7 @@ export function SupplierInventoryHub() {
 
   // Open Traceability Helper
   const openTrace = (id) => {
-    setTraceTargetId(id);
-    setIsTraceOpen(true);
+    navigate(`/stone-journey/${id}`);
   };
 
   // Open Print Label Helper
@@ -853,7 +841,7 @@ export function SupplierInventoryHub() {
     else if (step === 6) { setSearchParams({ submenu: 'qc', tab: 'qc2_inspections' }); }
     else if (step === 7) { setSearchParams({ submenu: 'processing', tab: 'cut' }); }
     else if (step === 8) { setSearchParams({ submenu: 'storage', tab: 'boxes' }); }
-    else if (step === 9) { setSearchParams({ submenu: 'storage', tab: 'print' }); }
+    else if (step === 9) { setSearchParams({ submenu: 'storage', tab: 'gen_label' }); }
     else if (step === 10) { setSearchParams({ submenu: 'stock', tab: 'stock_grid' }); }
   };
 
@@ -1104,6 +1092,11 @@ export function SupplierInventoryHub() {
         <ActionDropdown
           items={[
             {
+              label: 'Stone Journey',
+              icon: RouteIcon,
+              onClick: () => navigate(`/stone-journey/${r.blockNo || r.id}`)
+            },
+            {
               label: 'Add to QC 1',
               icon: ShieldCheck,
               confirm: `Send Block ${r.blockNo || r.id} to QC 1 Pending Queue?`,
@@ -1161,6 +1154,11 @@ export function SupplierInventoryHub() {
         return (
           <ActionDropdown
             items={[
+              {
+                label: 'Stone Journey',
+                icon: RouteIcon,
+                onClick: () => navigate(`/stone-journey/${slabItem.slabNo || slabItem.id || r.id}`)
+              },
               {
                 label: 'Add to QC 2',
                 icon: ShieldCheck,
@@ -1516,6 +1514,11 @@ export function SupplierInventoryHub() {
         <ActionDropdown
           items={[
             {
+              label: 'Stone Journey',
+              icon: RouteIcon,
+              onClick: () => navigate(`/stone-journey/${r.boxNo || r.id}`)
+            },
+            {
               label: 'Print Label',
               icon: Printer,
               confirm: `Print label for box ${r.boxNo || r.id}?`,
@@ -1557,6 +1560,11 @@ export function SupplierInventoryHub() {
       render: r => (
         <ActionDropdown
           items={[
+            {
+              label: 'Stone Journey',
+              icon: RouteIcon,
+              onClick: () => navigate(`/stone-journey/${r.linkedRecordId || r.qrCode || r.labelNo || r.id}`)
+            },
             {
               label: 'Print / Reprint Label',
               icon: Printer,
@@ -1973,7 +1981,7 @@ export function SupplierInventoryHub() {
                   <div style={{
                     padding: '16px 18px',
                     borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                    background: 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)',
                     border: '1px solid #e2e8f0',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                     display: 'flex',
@@ -3063,14 +3071,6 @@ export function SupplierInventoryHub() {
               </>
             );
           })()}
-
-          {(activeTab === 'print' || activeTab === 'reprint') && (
-            <DataTable
-              columns={labelColumns}
-              data={activeTab === 'reprint' ? [...labels].sort((a, b) => (b.printCount || 1) - (a.printCount || 1)) : labels}
-              emptyMessage="No labels created."
-            />
-          )}
         </>
       )}
 

@@ -17,7 +17,7 @@ import {
   Calendar,
   DollarSign
 } from 'lucide-react';
-import { DataTable } from '../CommonComponents';
+import { DataTable, StatusBadge, ActionDropdown } from '../CommonComponents';
 
 export function ContractorListScreen({
   onSelectContractor,
@@ -158,17 +158,26 @@ export function ContractorListScreen({
     },
     {
       header: 'Contractor Code',
-      accessor: (row) => (
-        <span style={{ fontWeight: 700, color: 'var(--brand-color)', fontFamily: 'monospace', fontSize: '13px' }}>
+      accessor: 'code',
+      render: (row) => (
+        <button
+          type="button"
+          className="btn btn-xs btn-ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectContractor(row.id);
+          }}
+          style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--brand-color)' }}
+        >
           {row.code || row.id}
-        </span>
+        </button>
       )
     },
     {
       header: 'Agency / Contractor Name',
-      accessor: (row) => (
+      render: (row) => (
         <div>
-          <div style={{ fontWeight: 600, color: 'var(--ink)' }}>{row.companyName}</div>
+          <strong style={{ color: 'var(--ink)' }}>{row.companyName}</strong>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
             <span className="badge badge-subtle" style={{ fontSize: '10px' }}>
               {row.serviceType || 'General Labour'}
@@ -182,7 +191,7 @@ export function ContractorListScreen({
     },
     {
       header: 'Trade & Billing Basis',
-      accessor: (row) => (
+      render: (row) => (
         <div style={{ fontSize: '12px' }}>
           <div style={{ fontWeight: 600, color: 'var(--ink)' }}>
             ₹{row.ratePerUnit || 0} / {row.billingBasis || 'Per Day'}
@@ -195,7 +204,7 @@ export function ContractorListScreen({
     },
     {
       header: 'Contact & City',
-      accessor: (row) => (
+      render: (row) => (
         <div style={{ fontSize: '12px' }}>
           {row.phone && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--ink)' }}>
@@ -210,7 +219,7 @@ export function ContractorListScreen({
     },
     {
       header: 'Linked Workforce',
-      accessor: (row) => {
+      render: (row) => {
         const count = getWorkerCount(row);
         return (
           <div>
@@ -227,60 +236,46 @@ export function ContractorListScreen({
     },
     {
       header: 'Status',
-      accessor: (row) => (
-        row.status === 'Inactive' ? (
-          <span className="badge badge-neutral">Inactive</span>
-        ) : (
-          <span className="badge badge-success">Active</span>
-        )
-      )
+      accessor: 'status',
+      render: (row) => <StatusBadge status={row.status || 'Active'} />
     },
     {
       header: 'Actions',
-      accessor: (row) => (
-        <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => onSelectContractor(row.id)}
-            title="View Contractor & Workers"
-            style={{ padding: '4px 6px' }}
-          >
-            <Eye size={14} />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => onOpenEdit(row)}
-            title="Edit Contractor"
-            style={{ padding: '4px 6px' }}
-          >
-            <Edit size={14} />
-          </button>
-          {row.status === 'Inactive' ? (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm text-success"
-              onClick={() => onRestoreContractor(row.id)}
-              title="Restore to Active"
-              style={{ padding: '4px 6px' }}
-            >
-              <RotateCcw size={14} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm text-danger"
-              onClick={() => onDeleteContractor(row.id)}
-              title="Archive Contractor"
-              style={{ padding: '4px 6px' }}
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-        </div>
-      ),
-      style: { width: '110px', textAlign: 'right' }
+      align: 'right',
+      render: (row) => {
+        const isInactive = row.status === 'Inactive';
+        return (
+          <ActionDropdown
+            items={[
+              {
+                label: 'View Dossier / Workers',
+                icon: Eye,
+                onClick: () => onSelectContractor(row.id)
+              },
+              {
+                label: 'Edit Contractor',
+                icon: Edit,
+                onClick: () => onOpenEdit(row)
+              },
+              ...(isInactive ? [
+                {
+                  label: 'Restore Contractor',
+                  icon: RotateCcw,
+                  onClick: () => onRestoreContractor(row.id)
+                }
+              ] : [
+                {
+                  label: 'Archive Contractor',
+                  icon: Trash2,
+                  danger: true,
+                  confirm: `Archive contractor ${row.companyName}? Linked workers will also be marked Inactive.`,
+                  onClick: () => onDeleteContractor(row.id)
+                }
+              ])
+            ]}
+          />
+        );
+      }
     }
   ];
 

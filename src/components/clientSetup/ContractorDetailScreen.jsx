@@ -760,14 +760,13 @@ export function ContractorDetailScreen({ contractorId, onBack, onEdit, onDelete,
             </h3>
             <form onSubmit={handleSaveWorker} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label className="form-label" style={{ fontSize: '12px' }}>Worker Full Name *</label>
+                <label className="form-label" style={{ fontSize: '12px' }}>Worker Full Name</label>
                 <input
                   type="text"
                   className="form-control"
                   value={workerForm.name}
                   onChange={(e) => setWorkerForm({ ...workerForm, name: e.target.value })}
                   placeholder="e.g. Mukesh Gurjar"
-                  required
                 />
               </div>
 
@@ -866,14 +865,13 @@ export function ContractorDetailScreen({ contractorId, onBack, onEdit, onDelete,
             </h3>
             <form onSubmit={handleSaveContact} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label className="form-label" style={{ fontSize: '12px' }}>Full Name *</label>
+                <label className="form-label" style={{ fontSize: '12px' }}>Full Name</label>
                 <input
                   type="text"
                   className="form-control"
                   value={contactForm.name}
                   onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
                   placeholder="e.g. Rameshwar Gurjar"
-                  required
                 />
               </div>
 
@@ -940,14 +938,13 @@ export function ContractorDetailScreen({ contractorId, onBack, onEdit, onDelete,
             </h3>
             <form onSubmit={handleSaveDoc} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label className="form-label" style={{ fontSize: '12px' }}>Document Name *</label>
+                <label className="form-label" style={{ fontSize: '12px' }}>Document Name</label>
                 <input
                   type="text"
                   className="form-control"
                   value={docForm.name}
                   onChange={(e) => setDocForm({ ...docForm, name: e.target.value })}
                   placeholder="e.g. Labour Welfare Licence"
-                  required
                 />
               </div>
 

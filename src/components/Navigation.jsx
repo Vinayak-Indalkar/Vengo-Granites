@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import {
@@ -31,7 +31,9 @@ import {
   ShieldCheck,
   Scissors,
   Move,
-  Globe
+  Globe,
+  UserCheck,
+  Route as RouteIcon
 } from 'lucide-react';
 import { VengoLogo } from './VengoLogo';
 
@@ -42,9 +44,22 @@ export function Sidebar() {
 
   // Accordion state: At a time, only one submenu is open
   const getRouteMenu = () => {
+    if (location.pathname.startsWith('/stone-journey')) return 'Stone Journey';
     if (location.pathname.startsWith('/client-setup')) return 'Client Setup';
-    if (location.pathname.startsWith('/inventory')) return 'Inventory';
     if (location.pathname.startsWith('/masters')) return 'Master Setup';
+    if (location.pathname.startsWith('/inventory')) return 'Inventory';
+    if (location.pathname.startsWith('/purchase-orders')) return 'Purchase Orders';
+    if (location.pathname.startsWith('/receipts')) return 'Receipts';
+    if (location.pathname.startsWith('/sales-invoices')) return 'Sales Invoices';
+    if (location.pathname.startsWith('/accounts')) return 'Accounts';
+    if (location.pathname.startsWith('/returns')) return 'Returns & Defects';
+    if (location.pathname.startsWith('/reports')) return 'Reports';
+    if (location.pathname.startsWith('/purchase-requests')) return 'Purchase Requests';
+    if (location.pathname.startsWith('/material-receipts')) return 'Material Receipts';
+    if (location.pathname.startsWith('/yard-stock')) return 'Yard & Stock';
+    if (location.pathname.startsWith('/buyer-accounts')) return 'Accounts';
+    if (location.pathname.startsWith('/buyer-returns')) return 'Returns & Defects';
+    if (location.pathname.startsWith('/buyer-reports')) return 'Reports';
     if (location.pathname.startsWith('/settings')) return 'Settings';
     return null;
   };
@@ -57,36 +72,41 @@ export function Sidebar() {
     }
   }, [location.pathname]);
 
-  // 1. QT Super Admin Menu: Master Setup
+  // 1. QT Super Admin Menu
   const superAdminMenu = [
     { label: 'Master Setup', path: '/masters', icon: Building2 }
   ];
 
-  // 2. Supplier/Client Admin Menu:
-  // - Dashboard, Client Setup (Suppliers, Buyers, Contractors), Masters (Inventory submenu), Inventory (with Sub-menus), Purchase Orders, Receipts, Sales Invoices, Accounts, Settings
+  // 2. Supplier/Client Admin Menu
   const supplierClientAdminMenu = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     {
       label: 'Client Setup',
-      path: '/client-setup?tab=suppliers',
+      path: '/client-setup?submenu=suppliers',
       icon: Users,
       children: [
-        { label: 'Suppliers', path: '/client-setup?tab=suppliers' },
-        { label: 'Buyers', path: '/client-setup?tab=buyers' },
-        { label: 'Contractors', path: '/client-setup?tab=contractors' }
+        { label: 'Suppliers', path: '/client-setup?submenu=suppliers' },
+        { label: 'Buyers', path: '/client-setup?submenu=buyers' },
+        { label: 'Contractors', path: '/client-setup?submenu=contractors' }
       ]
     },
     {
-      label: 'Masters',
+      label: 'Master Setup',
       path: '/masters?submenu=inventory',
       icon: Layers,
       children: [
-        { label: 'Inventory', path: '/masters?submenu=inventory' }
+        { label: 'Inventory Masters', path: '/masters?submenu=inventory' },
+        { label: 'Commercial Masters', path: '/masters?submenu=commercial' },
+        { label: 'Accounts Masters', path: '/masters?submenu=accounts' },
+        { label: 'Returns & Defects', path: '/masters?submenu=returns-defects' },
+        { label: 'Logistics Masters', path: '/masters?submenu=logistics' },
+        { label: 'Rules & Policies', path: '/masters?submenu=rules' },
+        { label: 'Units & Conversions', path: '/masters?submenu=units' }
       ]
     },
     {
       label: 'Inventory',
-      path: '/inventory',
+      path: '/inventory?submenu=inbound',
       icon: Box,
       children: [
         { label: 'Inbound', path: '/inventory?submenu=inbound' },
@@ -97,9 +117,66 @@ export function Sidebar() {
         { label: 'Exceptions', path: '/inventory?submenu=exceptions' }
       ]
     },
-    { label: 'Purchase Orders', path: '/purchase-orders', icon: FileCheck2 },
-    { label: 'Receipts', path: '/receipts', icon: Scale },
-    { label: 'Sales Invoices', path: '/sales-invoices', icon: Receipt },
+    {
+      label: 'Stone Journey',
+      path: '/stone-journey',
+      icon: RouteIcon
+    },
+    {
+      label: 'Purchase Orders',
+      path: '/purchase-orders?submenu=buyer-pos',
+      icon: FileCheck2,
+      children: [
+        { label: 'Buyer POs', path: '/purchase-orders?submenu=buyer-pos' },
+        { label: 'Quarry POs', path: '/purchase-orders?submenu=quarry-pos' }
+      ]
+    },
+    {
+      label: 'Receipts',
+      path: '/receipts',
+      icon: Scale
+    },
+    {
+      label: 'Sales Invoices',
+      path: '/sales-invoices?submenu=orders',
+      icon: Receipt,
+      children: [
+        { label: 'Orders', path: '/sales-invoices?submenu=orders' },
+        { label: 'Billing', path: '/sales-invoices?submenu=billing' },
+        { label: 'Dispatch', path: '/sales-invoices?submenu=dispatch' }
+      ]
+    },
+    {
+      label: 'Accounts',
+      path: '/accounts?submenu=receivables',
+      icon: DollarSign,
+      children: [
+        { label: 'Receivables', path: '/accounts?submenu=receivables' },
+        { label: 'Payables', path: '/accounts?submenu=payables' },
+        { label: 'Match', path: '/accounts?submenu=match' }
+      ]
+    },
+    {
+      label: 'Returns & Defects',
+      path: '/returns?submenu=returns',
+      icon: AlertTriangle,
+      children: [
+        { label: 'Returns', path: '/returns?submenu=returns' },
+        { label: 'Defects', path: '/returns?submenu=defects' }
+      ]
+    },
+    {
+      label: 'Reports',
+      path: '/reports?submenu=sales',
+      icon: BarChart3,
+      children: [
+        { label: 'Sales', path: '/reports?submenu=sales' },
+        { label: 'Purchase', path: '/reports?submenu=purchase' },
+        { label: 'Stock', path: '/reports?submenu=stock' },
+        { label: 'Quality', path: '/reports?submenu=quality' },
+        { label: 'Audit', path: '/reports?submenu=audit' }
+      ]
+    },
     {
       label: 'Settings',
       path: '/settings?submenu=general',
@@ -111,8 +188,7 @@ export function Sidebar() {
     }
   ];
 
-  // 3. Client HR Admin Menu:
-  // - Personnel, Attendance, Shift & Roster, Leave & Holidays, HR Masters, Audit & Reports, Settings
+  // 3. Client HR Admin Menu
   const clientHRAdminMenu = [
     { label: 'Personnel', path: '/hr?tab=personnel', icon: Users },
     { label: 'Attendance', path: '/hr?tab=attendance', icon: Clock },
@@ -123,17 +199,56 @@ export function Sidebar() {
     { label: 'Settings', path: '/settings', icon: Settings }
   ];
 
-  // 4. Buyer Admin Menu:
-  // - Dashboard, Purchase Requests, Material Receipts, Yard & Stock, Sales, Damage Logging, Daily Reports, Settings
+  // 4. Buyer Admin Menu
   const buyerAdminMenu = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Purchase Requests', path: '/purchase-requests', icon: PlusCircle },
-    { label: 'Material Receipts', path: '/receipts', icon: Scale },
-    { label: 'Yard & Stock', path: '/inventory', icon: Box },
-    { label: 'Sales', path: '/sales-invoices', icon: Receipt },
-    { label: 'Damage Logging', path: '/returns?tab=defective', icon: AlertTriangle },
-    { label: 'Daily Reports', path: '/reports?tab=sales', icon: BarChart3 },
-    { label: 'Settings', path: '/settings', icon: Settings }
+    {
+      label: 'Purchase Requests',
+      path: '/purchase-requests?submenu=requests',
+      icon: PlusCircle
+    },
+    {
+      label: 'Material Receipts',
+      path: '/material-receipts?submenu=receiving',
+      icon: Scale
+    },
+    {
+      label: 'Yard & Stock',
+      path: '/yard-stock?submenu=stock',
+      icon: Box,
+      children: [
+        { label: 'Stock', path: '/yard-stock?submenu=stock' },
+        { label: 'Yard', path: '/yard-stock?submenu=yard' }
+      ]
+    },
+    {
+      label: 'Accounts',
+      path: '/buyer-accounts?submenu=payables',
+      icon: DollarSign,
+      children: [
+        { label: 'Payables', path: '/buyer-accounts?submenu=payables' },
+        { label: 'Match', path: '/buyer-accounts?submenu=match' }
+      ]
+    },
+    {
+      label: 'Returns & Defects',
+      path: '/buyer-returns?submenu=returns',
+      icon: AlertTriangle,
+      children: [
+        { label: 'Returns', path: '/buyer-returns?submenu=returns' },
+        { label: 'Damage', path: '/buyer-returns?submenu=damage' }
+      ]
+    },
+    {
+      label: 'Reports',
+      path: '/buyer-reports?submenu=reports',
+      icon: BarChart3
+    },
+    {
+      label: 'Settings',
+      path: '/settings?submenu=general',
+      icon: Settings
+    }
   ];
 
   let menuItems = supplierClientAdminMenu;
@@ -147,20 +262,12 @@ export function Sidebar() {
       if (location.pathname !== pathBase) return false;
       const targetParams = new URLSearchParams(queryStr);
       const currentParams = new URLSearchParams(location.search);
-      // If target specifies 'submenu', check if current search has matching submenu
       if (targetParams.has('submenu')) {
-        const defaultSub = location.pathname === '/settings'
-          ? 'general'
-          : location.pathname === '/masters'
-            ? 'inventory'
-            : 'inbound';
-        const currentSub = currentParams.get('submenu') || defaultSub;
+        const currentSub = currentParams.get('submenu');
         return currentSub === targetParams.get('submenu');
       }
-      // If target specifies 'tab', check if current search has the same 'tab'
       if (targetParams.has('tab')) {
-        const defaultTab = location.pathname === '/client-setup' ? 'suppliers' : null;
-        const currentTab = currentParams.get('tab') || defaultTab;
+        const currentTab = currentParams.get('tab');
         return currentTab === targetParams.get('tab');
       }
       return location.search === `?${queryStr}`;
@@ -351,6 +458,7 @@ export function Sidebar() {
 export function Topbar() {
   const {
     currentRole,
+    setCurrentRole,
     currentUser,
     logout,
     activeClient,
@@ -359,20 +467,79 @@ export function Topbar() {
     notifications,
     language,
     setLanguage,
+    buyers = [],
+    customers = [],
+    activeBuyerId,
+    setActiveBuyerId,
     t
   } = useApp();
 
+  const buyerList = buyers.length > 0 ? buyers : customers;
   const [showNotif, setShowNotif] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <header className="app-topbar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '15px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px' }}>
         <span style={{ color: 'var(--muted)', fontWeight: 500 }}>{t('Welcome')},</span>
-        <span style={{ color: 'var(--ink)', fontWeight: 700 }}>{currentUser?.name || 'Aditya Varma'}</span>
+        <span style={{ color: 'var(--ink)', fontWeight: 700 }}>{currentUser?.name || 'Rajesh Sharma'}</span>
       </div>
 
       <div className="topbar-actions">
+        {/* Role Switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
+          <ShieldCheck size={14} style={{ color: 'var(--muted)' }} />
+          <select
+            className="form-control"
+            value={currentRole}
+            onChange={(e) => setCurrentRole(e.target.value)}
+            style={{
+              padding: '2px 8px',
+              fontSize: '12px',
+              height: '28px',
+              fontWeight: 600,
+              backgroundColor: 'var(--surface-sunken)',
+              border: '1px solid var(--line)',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+            title="Switch User Role"
+          >
+            <option value="Supplier/Client Admin">Supplier/Client Admin</option>
+            <option value="Buyer Admin">Buyer Admin</option>
+            <option value="QT Super Admin">QT Super Admin</option>
+            <option value="Client HR Admin">Client HR Admin</option>
+          </select>
+        </div>
+
+        {/* Buyer Picker for Buyer Admin */}
+        {currentRole === 'Buyer Admin' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Buyer:</span>
+            <select
+              className="form-control"
+              value={activeBuyerId || 'CUST-001'}
+              onChange={(e) => setActiveBuyerId(e.target.value)}
+              style={{
+                padding: '2px 8px',
+                fontSize: '12px',
+                height: '28px',
+                fontWeight: 600,
+                backgroundColor: 'var(--surface-sunken)',
+                border: '1px solid var(--line)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                maxWidth: '180px'
+              }}
+              title="Acting as Buyer"
+            >
+              {buyerList.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Language Switcher in Topbar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginRight: '4px' }}>
           <Globe size={14} style={{ color: 'var(--muted)' }} />
@@ -459,7 +626,7 @@ export function Topbar() {
           )}
         </div>
 
-        {/* Logout right after notification icon */}
+        {/* Logout */}
         <button
           className="iconbtn"
           title="Sign Out"
@@ -491,7 +658,7 @@ export function Topbar() {
             {currentUser?.avatar ? (
               <img
                 src={currentUser.avatar}
-                alt={currentUser.name || 'Aditya Varma'}
+                alt={currentUser.name || 'User'}
                 onError={e => {
                   e.currentTarget.style.display = 'none';
                   if (e.currentTarget.nextElementSibling) {
@@ -526,16 +693,16 @@ export function Topbar() {
                 flexShrink: 0
               }}
             >
-              {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'A'}
+              {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
             </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25, textAlign: 'left' }}>
             <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap' }}>
-              {currentUser?.name || 'Aditya Varma'}
+              {currentUser?.name || 'Rajesh Sharma'}
             </span>
             <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
-              {currentRole || currentUser?.role || 'User'}
+              {currentRole || 'Supplier/Client Admin'}
             </span>
           </div>
         </div>

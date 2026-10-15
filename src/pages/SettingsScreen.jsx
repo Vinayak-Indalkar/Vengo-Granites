@@ -64,51 +64,6 @@ export function SettingsScreen() {
         )}
       </div>
 
-      {/* Submenu Top Navigation Tabs */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        borderBottom: '1px solid var(--line)',
-        marginBottom: '20px',
-        paddingBottom: '2px'
-      }}>
-        <button
-          type="button"
-          onClick={() => setSearchParams({ submenu: 'general' })}
-          className={`btn btn-sm ${submenu === 'general' ? 'btn-primary' : 'btn-ghost'}`}
-          style={{
-            fontSize: '13px',
-            fontWeight: submenu === 'general' ? 700 : 500,
-            borderRadius: '6px 6px 0 0',
-            borderBottom: submenu === 'general' ? '2px solid var(--brand-color)' : 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}
-        >
-          <Sliders size={14} />
-          <span>{t('General Settings')}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSearchParams({ submenu: 'custom-fields' })}
-          className={`btn btn-sm ${submenu === 'custom-fields' ? 'btn-primary' : 'btn-ghost'}`}
-          style={{
-            fontSize: '13px',
-            fontWeight: submenu === 'custom-fields' ? 700 : 500,
-            borderRadius: '6px 6px 0 0',
-            borderBottom: submenu === 'custom-fields' ? '2px solid var(--brand-color)' : 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}
-        >
-          <Layers size={14} />
-          <span>{t('Custom Fields Builder')}</span>
-        </button>
-      </div>
-
       {/* RENDER ACTIVE SUBMENU */}
       {submenu === 'custom-fields' ? (
         <CustomFieldsBuilder />

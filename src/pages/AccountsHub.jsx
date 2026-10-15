@@ -1,54 +1,114 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Breadcrumb } from '../components/CommonComponents';
-import {
-  SupplierBillsScreen,
-  SupplierPaymentsScreen,
-  CustomerPaymentsScreen,
-  ContractorPaymentsScreen,
-  AgeingScreen
-} from './AccountsPages';
+import { useApp } from '../context/AppContext';
+import { AccountsModuleTab } from '../components/trade/AccountsModuleTab';
 
 export function AccountsHub() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'bills';
+  const submenu = searchParams.get('submenu') || 'receivables';
+  const tab = searchParams.get('tab') || (submenu === 'receivables' ? 'customer-payments' : submenu === 'payables' ? 'supplier-bills' : '3-way-match');
 
-  const setTab = (newTab) => {
-    setSearchParams({ tab: newTab });
+  const {
+    tradeInvoices = [],
+    tradeSupplierBills = [],
+    tradeGRNs = [],
+    tradeQuarryPOs = []
+  } = useApp();
+
+  const setSubmenuAndTab = (newSubmenu, defaultTab) => {
+    setSearchParams({ submenu: newSubmenu, tab: defaultTab });
   };
 
+  const setTab = (newTab) => {
+    setSearchParams({ submenu, tab: newTab });
+  };
+
+  // Badge counts
+  const overdueInvoicesCount = tradeInvoices.filter(i => i.status === 'Overdue' || (i.outstandingAmount > 0 && new Date(i.dueDate) < new Date('2026-10-15'))).length;
+  const pendingSupplierBillsCount = tradeSupplierBills.filter(b => b.status === 'Pending').length;
+
   return (
-    <div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+      {/* Level 3: Tabs */}
       <div style={{
-        padding: '12px 20px',
+        padding: '10px 20px',
         borderBottom: '1px solid var(--line)',
         backgroundColor: 'var(--white)',
         display: 'flex',
+        alignItems: 'center',
         gap: '8px',
-        overflowX: 'auto'
+        overflowX: 'auto',
+        flexShrink: 0
       }}>
-        <button className={`btn btn-sm ${tab === 'bills' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('bills')}>
-          Supplier Bills
-        </button>
-        <button className={`btn btn-sm ${tab === 'suppay' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('suppay')}>
-          Supplier Payments
-        </button>
-        <button className={`btn btn-sm ${tab === 'custpay' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('custpay')}>
-          Customer Receipts
-        </button>
-        <button className={`btn btn-sm ${tab === 'conpay' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('conpay')}>
-          Contractor Pay
-        </button>
-        <button className={`btn btn-sm ${tab === 'ageing' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('ageing')}>
-          Ageing
-        </button>
+        {submenu === 'receivables' && (
+          <>
+            <button
+              className={`btn btn-sm ${tab === 'customer-payments' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('customer-payments')}
+              style={{ fontWeight: tab === 'customer-payments' ? 700 : 500 }}
+            >
+              Customer Payments
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'ageing' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('ageing')}
+              style={{ fontWeight: tab === 'ageing' ? 600 : 500 }}
+            >
+              Ageing
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'statements' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('statements')}
+              style={{ fontWeight: tab === 'statements' ? 600 : 500 }}
+            >
+              Statements
+            </button>
+          </>
+        )}
+
+        {submenu === 'payables' && (
+          <>
+            <button
+              className={`btn btn-sm ${tab === 'supplier-bills' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('supplier-bills')}
+              style={{ fontWeight: tab === 'supplier-bills' ? 600 : 500 }}
+            >
+              Supplier Bills
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'supplier-payments' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('supplier-payments')}
+              style={{ fontWeight: tab === 'supplier-payments' ? 700 : 500 }}
+            >
+              Supplier Payments
+            </button>
+            <button
+              className={`btn btn-sm ${tab === 'contractor-payments' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setTab('contractor-payments')}
+              style={{ fontWeight: tab === 'contractor-payments' ? 700 : 500 }}
+            >
+              Contractor Payments
+            </button>
+          </>
+        )}
+
+        {submenu === 'match' && (
+          <button
+            className={`btn btn-sm ${tab === '3-way-match' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setTab('3-way-match')}
+            style={{ fontWeight: tab === '3-way-match' ? 700 : 500 }}
+          >
+            3-Way Match
+          </button>
+        )}
       </div>
 
-      {tab === 'bills' && <SupplierBillsScreen />}
-      {tab === 'suppay' && <SupplierPaymentsScreen />}
-      {tab === 'custpay' && <CustomerPaymentsScreen />}
-      {tab === 'conpay' && <ContractorPaymentsScreen />}
-      {tab === 'ageing' && <AgeingScreen />}
+      {/* Main Tab Content */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="page-wrapper">
+          <AccountsModuleTab submenu={submenu} tab={tab} />
+        </div>
+      </div>
     </div>
   );
 }
